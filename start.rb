@@ -31,6 +31,18 @@ op = OptionParser.new do |op|
     opts[:rate] = r
   end
 
+  op.on("-g INTERVAL", Float, "gps update interval") do |g|
+    opts[:gps_interval] = g
+  end
+
+  op.on("--hil_gps", "turn on hil_gps mode") do
+    opts[:hil_gps] = true
+  end
+
+  op.on("--plugin_lists PATH", "path to mavros pluginlists.yaml") do |p|
+    opts[:plugin_lists] = p
+  end
+
   op.on("-h", "help") do
     puts op
     exit
@@ -92,6 +104,7 @@ opts[:num].times do |i|
   mav_oport = mav_port + 5
   mav_oport2 = mav_port + 6
 
+  hil_gps_port = mav_port + 8
   sim_port = mav_port + 9
 
   bridge_port = mav_port + 2000
@@ -126,6 +139,7 @@ opts[:num].times do |i|
 
         rc.sub!("-u 14557","-u #{mav_port2}")
         rc.sub!("-o 14540","-o #{mav_oport2}")
+        rc.sub!("gpssim start","param set MAV_USEHILGPS 1") if opts[:hil_gps]
 
         File.open(rc_file, 'w') { |out| out << rc }
       end
@@ -140,13 +154,18 @@ opts[:num].times do |i|
       <uri>model://#{model}</uri>
       <pose>#{x} 0 0 0 0 0</pose>
       <name>#{model_name}</name>
-      <mavlink_udp_port>#{sim_port}</mavlink_udp_port>
-    </include>\n"
+      <mavlink_udp_port>#{sim_port}</mavlink_udp_port>\n"
+    model_incs += "      <gps_update_interval>#{opts[:gps_interval]}</gps_update_interval>\n"  if opts[:gps_interval]
+    model_incs += "      <hil_gps_port>#{hil_gps_port}</hil_gps_port>\n" if opts[:hil_gps]
+    model_incs += "    </include>\n"
   }
 
   cd(mavros_dir) {
     sleep 1
-    system("./roslaunch_num.sh", "#{m_num}", "#{mav_oport2}", "#{mav_port2}", "#{bridge_port}")
+
+    pl="plugin_lists:=#{File.expand_path(opts[:plugin_lists], wrk_dir)}" if opts[:plugin_lists]
+    pid = spawn("roslaunch px4_num.launch num:=#{m_num} inport:=#{mav_oport2} outport:=#{mav_port2} bridge_inport:=#{bridge_port} #{pl}")
+    Process.detach(pid)
   }
 end
 
