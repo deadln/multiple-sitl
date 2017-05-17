@@ -14,7 +14,7 @@ wrk_dir = __dir__ + '/'
 
 #options
 all_model_names = ["iris", "iris_opt_flow"]
-opts = { model: "iris", num: 1, rate: 10000 }
+opts = { model: "iris", num: 1, rate: 10000, filter: "ekf2" }
 
 op = OptionParser.new do |op|
   op.banner = "Usage: #{__FILE__} [options] [world_file]"
@@ -41,6 +41,14 @@ op = OptionParser.new do |op|
 
   op.on("--plugin_lists PATH", "path to mavros pluginlists.yaml") do |p|
     opts[:plugin_lists] = p
+  end
+
+  op.on("-f FILTER", "filter") do |o|
+    opts[:filter] = o
+  end
+
+  op.on("--logging", "turn on logging") do
+    opts[:logging] = true
   end
 
   op.on("-h", "help") do
@@ -74,7 +82,7 @@ model = opts[:model]
 #Firmware
 px4_fname="px4"
 px4_dir="Firmware/build_posix_sitl_default/src/firmware/posix/"
-rc_script="Firmware/posix-configs/SITL/init/ekf2/#{model}"
+rc_script="Firmware/posix-configs/SITL/init/#{opts[:filter]}/#{model}"
 
 #sitl_gazebo
 model_path = "sitl_gazebo/models/#{model}/#{model}.sdf"
@@ -127,7 +135,10 @@ opts[:num].times do |i|
         rc1 ||= File.read(wrk_dir + rc_script)
         rc = rc1.sub('param set MAV_TYPE',"param set MAV_SYS_ID #{m_num}\nparam set MAV_TYPE")
         rc.sub!('ROMFS/px4fmu_common/mixers/','')
-        rc.sub!(/sdlog2 start.*\n/,'')
+        unless opts[:logging]
+          rc.sub!(/sdlog2 start.*\n/,'')
+          rc.sub!(/logger start.*\n/,'')
+        end
         rc.sub!(/.*OPTICAL_FLOW_RAD.*\n/,'') if model=="iris"
 
         rc.sub!(/simulator start -s.*$/,"simulator start -s -u #{sim_port}")
