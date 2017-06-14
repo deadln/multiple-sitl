@@ -23,6 +23,10 @@ op = OptionParser.new do |op|
     opts[:model] = m
   end
 
+  op.on("--gazebo_model MODEL", "gazebo model name") do |p|
+    opts[:gazebo_model] = p
+  end
+
   op.on("-n NUM", Integer, "number of instances") do |n|
     opts[:num] = n
   end
@@ -65,19 +69,22 @@ if users_world_fname
     exit
   end
 
-  str = File.read(users_world_fname)
-  all_model_names.each { |m|
-    uri = "<uri>model://#{m}</uri>"
-    if str.include?(uri)
-      opts[:model] = m
-      opts[:num] = str.lines.grep(/.*#{uri}.*/).size
+  unless opts[:model]
+    str = File.read(users_world_fname)
+    all_model_names.each { |m|
+      uri = "<uri>model://#{m}</uri>"
+      if str.include?(uri)
+        opts[:model] = m
+        opts[:num] = str.lines.grep(/.*#{uri}.*/).size
 
-      break
-    end
-  }
+        break
+      end
+    }
+  end
 end
 
 model = opts[:model]
+gazebo_model = opts[:gazebo_model] || opts[:model]
 
 #Firmware
 px4_fname="px4"
@@ -85,7 +92,7 @@ px4_dir="Firmware/build_posix_sitl_default/src/firmware/posix/"
 rc_script="Firmware/posix-configs/SITL/init/#{opts[:filter]}/#{model}"
 
 #sitl_gazebo
-model_path = "sitl_gazebo/models/#{model}/#{model}.sdf"
+#model_path = "sitl_gazebo/models/#{model}/#{model}.sdf"
 world_path = "sitl_gazebo/worlds/#{model}.world"
 world_fname="default.world"
 model_incs = ""
@@ -118,7 +125,7 @@ opts[:num].times do |i|
   bridge_port = mav_port + 2000
 
   cd(sitl_base_path) {
-    model_name="#{model}#{m_num}"
+    model_name="#{gazebo_model}#{m_num}"
     mkdir_p model_name
 
     cd(model_name) {
@@ -162,7 +169,7 @@ opts[:num].times do |i|
 
     #generate model
     model_incs += "    <include>
-      <uri>model://#{model}</uri>
+      <uri>model://#{gazebo_model}</uri>
       <pose>#{x} 0 0 0 0 0</pose>
       <name>#{model_name}</name>
       <mavlink_udp_port>#{sim_port}</mavlink_udp_port>\n"
