@@ -39,6 +39,10 @@ op = OptionParser.new do |op|
     opts[:gps_interval] = g
   end
 
+  op.on("--imu_rate IMU_RATE", Integer, "imu rate") do |p|
+    opts[:imu_rate] = p
+  end
+
   op.on("--hil_gps", "turn on hil_gps mode") do
     opts[:hil_gps] = true
   end
@@ -174,6 +178,7 @@ opts[:num].times do |i|
       <name>#{model_name}</name>
       <mavlink_udp_port>#{sim_port}</mavlink_udp_port>\n"
     model_incs += "      <gps_update_interval>#{opts[:gps_interval]}</gps_update_interval>\n"  if opts[:gps_interval]
+    model_incs += "      <imu_rate>#{opts[:imu_rate]}</imu_rate>\n"  if opts[:imu_rate]
     model_incs += "      <hil_gps_port>#{hil_gps_port}</hil_gps_port>\n" if opts[:hil_gps]
     model_incs += "    </include>\n"
   }
