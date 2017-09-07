@@ -1,14 +1,15 @@
 <launch>
   <arg name="log_output" default="screen" />
   <arg name="plugin_lists" default="$(find mavros)/launch/px4_pluginlists.yaml" />
+  <arg name="bridge_on" default="false" />
 
   <!-- remap mavlink bridge topics -->
   <remap from="/mavlink/to" to="/mavlink$(arg num)/to" />
   <remap from="/mavlink/from" to="/mavlink$(arg num)/from" />
 
   <node pkg="mavros" type="mavros_node" name="mavros$(arg num)" required="true" clear_params="true" output="$(arg log_output)">
-    <param name="fcu_url" value="udp://127.0.0.1:$(arg inport)@127.0.0.1:$(arg outport)" />
-    <param name="gcs_url" value="udp://:$(arg bridge_inport)@" />
+    <param name="fcu_url" value="$(arg fcu_url)" />
+    <param name="gcs_url" value="udp://:$(arg gcs_inport)@" />
     <param name="system_id" value="$(arg num)" />
     <param name="target_system_id" value="$(arg num)" />
     <param name="target_component_id" value="1" />
@@ -20,9 +21,8 @@
     <rosparam command="load" file="$(arg plugin_lists)" />
     <rosparam command="load" file="$(find mavros)/launch/px4_config.yaml" />
   </node>
-<!--
-  <node pkg="mavros" type="gcs_bridge" name="gcs_bridge$(arg num)">
+
+  <node if="$(arg bridge_on)" pkg="mavros" type="gcs_bridge" name="gcs_bridge$(arg num)">
     <param name="gcs_url" value="udp://:$(arg bridge_inport)@" />
   </node>
--->
 </launch>

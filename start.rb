@@ -59,6 +59,10 @@ op = OptionParser.new do |op|
     opts[:logging] = true
   end
 
+  op.on("--hitl", "HITL mode") do
+    opts[:hitl] = true
+  end
+
   op.on("-h", "help") do
     puts op
     exit
@@ -117,6 +121,8 @@ opts[:num].times do |i|
   m_index=i
   m_num=i+1
 
+  next if opts[:hitl] and opts[:num] != m_num
+
   mav_port = base_port + m_index*port_step
   mav_port2 = mav_port + 1
 
@@ -128,8 +134,9 @@ opts[:num].times do |i|
 
   bridge_port = mav_port + 2000
 
+  model_name="#{gazebo_model}#{m_num}"
+
   cd(sitl_base_path) {
-    model_name="#{gazebo_model}#{m_num}"
     mkdir_p model_name
 
     cd(model_name) {
@@ -170,24 +177,26 @@ opts[:num].times do |i|
       pid = spawn("../"+px4_fname,"-d",rc_file, :out => "out.log", :err => "err.log")
       Process.detach(pid)
     }
+  } unless opts[:hitl]
 
-    #generate model
-    model_incs += "    <include>
-      <uri>model://#{gazebo_model}</uri>
-      <pose>#{x} 0 0 0 0 0</pose>
-      <name>#{model_name}</name>
-      <mavlink_udp_port>#{sim_port}</mavlink_udp_port>\n"
-    model_incs += "      <gps_update_interval>#{opts[:gps_interval]}</gps_update_interval>\n"  if opts[:gps_interval]
-    model_incs += "      <imu_rate>#{opts[:imu_rate]}</imu_rate>\n"  if opts[:imu_rate]
-    model_incs += "      <hil_gps_port>#{hil_gps_port}</hil_gps_port>\n" if opts[:hil_gps]
-    model_incs += "    </include>\n"
-  }
+  #generate model
+  model_incs += "    <include>
+    <uri>model://#{gazebo_model}</uri>
+    <pose>#{x} 0 0 0 0 0</pose>
+    <name>#{model_name}</name>
+    <mavlink_udp_port>#{sim_port}</mavlink_udp_port>\n"
+  model_incs += "      <gps_update_interval>#{opts[:gps_interval]}</gps_update_interval>\n"  if opts[:gps_interval]
+  model_incs += "      <imu_rate>#{opts[:imu_rate]}</imu_rate>\n"  if opts[:imu_rate]
+  model_incs += "      <hil_gps_port>#{hil_gps_port}</hil_gps_port>\n" if opts[:hil_gps]
+  model_incs += "    </include>\n"
 
   cd(mavros_dir) {
     sleep 1
 
     pl="plugin_lists:=#{File.expand_path(opts[:plugin_lists], wrk_dir)}" if opts[:plugin_lists]
-    pid = spawn("roslaunch px4_num.launch num:=#{m_num} inport:=#{mav_oport2} outport:=#{mav_port2} bridge_inport:=#{bridge_port} #{pl}")
+    launch_opts = opts[:hitl] ? "bridge_on:=true bridge_inport:=#{bridge_port} fcu_url:=/dev/ttyACM0:921600 gcs_inport:=#{sim_port}" : "fcu_url:=udp://127.0.0.1:#{mav_oport2}@127.0.0.1:#{mav_port2} gcs_inport:=#{bridge_port}"
+
+    pid = spawn("roslaunch px4_num.launch num:=#{m_num} #{pl} #{launch_opts}")
     Process.detach(pid)
   }
 end
