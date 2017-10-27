@@ -167,6 +167,7 @@ opts[:num].times do |i|
         rc.sub!("mavlink start -u #{mav_port}","mavlink start -u #{mav_port} -o #{mav_oport}")
 
         rc.sub!("-u 14557","-u #{mav_port2}")
+        rc.sub!("-r 250 -s HIGHRES_IMU -u #{mav_port}", "-r #{opts[:imu_rate]} -s HIGHRES_IMU -u #{mav_port2}") if opts[:imu_rate]
         rc.sub!("-o 14540","-o #{mav_oport2}")
         rc.sub!("gpssim start","param set MAV_USEHILGPS 1") if opts[:hil_gps]
 
