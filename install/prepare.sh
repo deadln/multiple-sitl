@@ -8,6 +8,7 @@ git submodule update --init --remote
 #px4
 
 cd $dir/Firmware
+make clean
 make posix_sitl_default
 
 #sitl_gazebo
@@ -16,7 +17,8 @@ cd $dir/sitl_gazebo
 
 git submodule update --init --recursive
 
-mkdir -p build
+rm -rf build
+mkdir build
 cd build
 cmake ..
-make sdf rotors_gazebo_imu_plugin rotors_gazebo_mavlink_interface rotors_gazebo_motor_model rotors_gazebo_multirotor_base_plugin gazebo_lidar_plugin gazebo_opticalFlow_plugin
+make
