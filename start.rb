@@ -5,6 +5,12 @@ require 'fileutils'
 
 include FileUtils
 
+def xspawn(term_name, cmd, debug)
+  term = debug ? "xterm -T #{term_name} -e" : ""
+  pid = spawn("#{term} #{cmd}", [:out, :err]=>"/dev/null")
+  Process.detach(pid)
+end
+
 base_port=15010
 port_step=10
 distance=2
@@ -63,6 +69,14 @@ op = OptionParser.new do |op|
     opts[:hitl] = true
   end
 
+  op.on("--restart", "soft restart") do
+    opts[:restart] = true
+  end
+
+  op.on("--debug", "debug") do
+    opts[:debug] = true
+  end
+
   op.on("-h", "help") do
     puts op
     exit
@@ -108,7 +122,11 @@ model_incs = ""
 #mavros
 mavros_dir="mavros"
 
-system("./kill_sitl.sh")
+if opts[:restart]
+  system("pkill px4")
+else
+  system("./kill_sitl.sh")
+end
 sleep 1
 
 unless Dir.exist?(sitl_base_path)
@@ -175,8 +193,7 @@ opts[:num].times do |i|
       end
 
       #run px4
-      pid = spawn("../"+px4_fname,"-d",rc_file, :out => "out.log", :err => "err.log")
-      Process.detach(pid)
+      xspawn("px4-#{m_num}", "../#{px4_fname} -d #{rc_file}", opts[:debug])
     }
   } unless opts[:hitl]
 
@@ -197,19 +214,23 @@ opts[:num].times do |i|
     pl="plugin_lists:=#{File.expand_path(opts[:plugin_lists], wrk_dir)}" if opts[:plugin_lists]
     launch_opts = opts[:hitl] ? "bridge_on:=true bridge_inport:=#{bridge_port} fcu_url:=/dev/ttyACM0:921600 gcs_inport:=#{sim_port}" : "fcu_url:=udp://127.0.0.1:#{mav_oport2}@127.0.0.1:#{mav_port2} gcs_inport:=#{bridge_port}"
 
-    pid = spawn("roslaunch px4_num.launch num:=#{m_num} #{pl} #{launch_opts}")
-    Process.detach(pid)
-  }
+    xspawn("mavros-#{m_num}", "roslaunch px4_num.launch num:=#{m_num} #{pl} #{launch_opts}", opts[:debug])
+
+  } unless opts[:restart]
 end
 
-#run gzserver
-if users_world_fname
-  cp users_world_fname, world_fname
+if opts[:restart]
+  system("gz world -o")
 else
-  world_sdf = File.read(world_path)
-  File.open(world_fname, 'w') do |out|
-    out << world_sdf.sub!(/.*<include>.*\n.*<uri>model:\/\/iris.*<\/uri>.*\n.*<\/include>.*\n/, model_incs)
+  #run gzserver
+  if users_world_fname
+    cp users_world_fname, world_fname
+  else
+    world_sdf = File.read(world_path)
+    File.open(world_fname, 'w') do |out|
+      out << world_sdf.sub!(/.*<include>.*\n.*<uri>model:\/\/iris.*<\/uri>.*\n.*<\/include>.*\n/, model_incs)
+    end
   end
-end
 
-system("./gazebo.sh", world_fname)
+  xspawn("gazebo", "./gazebo.sh #{world_fname}", opts[:debug])
+end
