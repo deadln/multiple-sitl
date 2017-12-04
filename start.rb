@@ -238,13 +238,19 @@ else
   end
 
   #run gzserver
-  if users_world_fname
-    cp users_world_fname, world_fname
-  else
-    world_sdf = File.read(world_path)
-    File.open(world_fname, 'w') do |out|
-      out << world_sdf.sub!(/.*<include>.*\n.*<uri>model:\/\/iris.*<\/uri>.*\n.*<\/include>.*\n/, model_incs)
-    end
+  world_path = users_world_fname if users_world_fname
+
+  world_sdf = File.read(world_path)
+  world_sdf.sub!(/.*<include>.*\n.*<uri>model:\/\/iris.*<\/uri>.*\n.*<\/include>.*\n/, "")
+
+  File.open(world_fname, 'w') do |out|
+    world_sdf.each_line {|l|
+      out << l
+      if l =~ /.*<world.*\n/
+        out << model_incs
+      end
+    }
+
   end
 
   xspawn("gazebo", "./gazebo.sh #{world_fname}", opts[:debug])
