@@ -6,7 +6,7 @@ require 'fileutils'
 include FileUtils
 
 def xspawn(term_name, cmd, debug)
-  term = debug ? "xterm -T #{term_name} -e" : ""
+  term = debug ? "xterm -T #{term_name} -hold -e" : ""
   pid = spawn("#{term} #{cmd}", [:out, :err]=>"/dev/null")
   Process.detach(pid)
 end
@@ -118,6 +118,11 @@ rc_script="Firmware/posix-configs/SITL/init/#{opts[:filter]}/#{model}"
 world_path = "sitl_gazebo/worlds/#{model}.world"
 world_fname="default.world"
 model_incs = ""
+models_opts_fname = "options.xml"
+model_opts = ""
+model_opts_open = "<?xml version=\"1.0\" ?>
+<options>\n"
+model_opts_close = '</options>'
 
 #mavros
 mavros_dir="mavros"
@@ -199,14 +204,18 @@ opts[:num].times do |i|
 
   #generate model
   model_incs += "    <include>
-    <uri>model://#{gazebo_model}</uri>
-    <pose>#{x} 0 0 0 0 0</pose>
+      <uri>model://#{gazebo_model}</uri>
+      <pose>#{x} 0 0 0 0 0</pose>
+      <name>#{model_name}</name>
+    </include>\n"
+
+  model_opts += "  <model>
     <name>#{model_name}</name>
     <mavlink_udp_port>#{sim_port}</mavlink_udp_port>\n"
-  model_incs += "      <gps_update_interval>#{opts[:gps_interval]}</gps_update_interval>\n"  if opts[:gps_interval]
-  model_incs += "      <imu_rate>#{opts[:imu_rate]}</imu_rate>\n"  if opts[:imu_rate]
-  model_incs += "      <hil_gps_port>#{hil_gps_port}</hil_gps_port>\n" if opts[:hil_gps]
-  model_incs += "    </include>\n"
+  model_opts += "    <gps_update_interval>#{opts[:gps_interval]}</gps_update_interval>\n"  if opts[:gps_interval]
+  model_opts += "    <imu_rate>#{opts[:imu_rate]}</imu_rate>\n"  if opts[:imu_rate]
+  model_opts += "    <hil_gps_port>#{hil_gps_port}</hil_gps_port>\n" if opts[:hil_gps]
+  model_opts += "  </model>\n"
 
   cd(mavros_dir) {
     sleep 1
@@ -222,6 +231,12 @@ end
 if opts[:restart]
   system("gz world -o")
 else
+  File.open(models_opts_fname, 'w') do |out|
+    out << model_opts_open
+    out << model_opts
+    out << model_opts_close
+  end
+
   #run gzserver
   if users_world_fname
     cp users_world_fname, world_fname
