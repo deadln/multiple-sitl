@@ -11,6 +11,9 @@ apt-get install ros-${ros_release}-ros-base -y
 #mavros
 apt-get install ros-${ros_release}-mavros python-prettytable -y
 
+#catkin
+apt-get install python-wstool python-catkin-tools -y
+
 #clean
 apt-get clean
 
