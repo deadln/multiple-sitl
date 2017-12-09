@@ -125,6 +125,7 @@ op = OptionParser.new do |op|
 
   op.on("--restart", "soft restart") do
     opts[:restart] = true
+    puts "restarting ..."
   end
 
   op.on("--debug", "debug") do
@@ -180,7 +181,7 @@ if File.exist?(opts[:rosinstall]) and not Dir.exist?(opts[:catkin_ws])
 end
 
 if opts[:restart]
-  system("pkill px4")
+  system("./kill_px4.sh")
 else
   system("./kill_sitl.sh")
 end
