@@ -9,6 +9,8 @@ base_port=15010
 port_step=10
 distance=2
 px4_dir="px4dir"
+firmware_dir = "Firmware"
+sitl_gazebo_dir = "sitl_gazebo"
 
 #script dir
 @root_dir = __dir__ + '/'
@@ -18,13 +20,13 @@ px4_dir="px4dir"
 
 #Firmware
 px4_fname="px4"
+@firmware_dir = @root_dir + firmware_dir + '/'
 
 #options
 all_model_names = ["iris", "iris_opt_flow"]
 opts = { model: "iris", num: 1, rate: 10000, filter: "ekf2" , workspace: "workspace", gazebo: "gazebo", catkin_ws: "workspace/catkin_ws", rosinstall: "deps.rosinstall"}
 
 #sitl_gazebo
-sitl_gazebo_dir = "sitl_gazebo"
 world_fname = "default.world"
 models_opts_fname = "options.xml"
 model_opts_open = "<?xml version=\"1.0\" ?>
@@ -39,7 +41,7 @@ def xspawn(term_name, cmd, debug)
 end
 
 def create_fcu_files(opts,m_num)
-  rc_script = @root_dir + "Firmware/posix-configs/SITL/init/#{opts[:filter]}/#{opts[:model]}"
+  rc_script = @firmware_dir + "posix-configs/SITL/init/#{opts[:filter]}/#{opts[:model]}"
   @rc_file="rcS#{m_num}"
 
   unless File.exist?(@rc_file)
@@ -47,7 +49,7 @@ def create_fcu_files(opts,m_num)
     mkdir_p "rootfs/eeprom"
     touch "rootfs/eeprom/parameters"
 
-    cp @root_dir+"Firmware/ROMFS/px4fmu_common/mixers/quad_w.main.mix", "./"
+    cp @firmware_dir+"ROMFS/px4fmu_common/mixers/quad_w.main.mix", "./"
 
     #generate rc file
     rc1 ||= File.read(rc_script)
@@ -132,6 +134,10 @@ op = OptionParser.new do |op|
     opts[:debug] = true
   end
 
+  op.on("--nomavros", "without mavros") do
+    opts[:nomavros] = true
+  end
+
   op.on("--workspace PATH", "path to workspace") do |p|
     opts[:workspace] = p
   end
@@ -191,7 +197,7 @@ sleep 1
 
 unless File.exist?(px4_dir + px4_fname)
   mkdir_p px4_dir
-  cp "Firmware/build_posix_sitl_default/src/firmware/posix/" + px4_fname, px4_dir
+  cp @firmware_dir + "build_posix_sitl_default/src/firmware/posix/" + px4_fname, px4_dir
 end
 
 
@@ -255,7 +261,8 @@ opts[:num].times do |i|
 
     xspawn("mavros-#{m_num}", "./roslaunch.sh #{opts[:catkin_ws]} num:=#{m_num} #{pl} #{launch_opts}", opts[:debug])
 
-  } unless opts[:restart]
+  } unless opts[:restart] or opts[:nomavros]
+
 end
 
 if opts[:restart]
