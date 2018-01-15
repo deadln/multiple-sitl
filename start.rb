@@ -9,8 +9,8 @@ base_port=15010
 port_step=10
 distance=2
 px4_dir="px4dir"
-firmware_dir = "Firmware"
-sitl_gazebo_dir = "sitl_gazebo"
+firmware_dir = "../.."
+sitl_gazebo_dir = "../sitl_gazebo"
 
 #script dir
 @root_dir = __dir__ + '/'
@@ -49,12 +49,12 @@ def create_fcu_files(opts,m_num)
     mkdir_p "rootfs/eeprom"
     touch "rootfs/eeprom/parameters"
 
-    cp @firmware_dir+"ROMFS/px4fmu_common/mixers/quad_w.main.mix", "./"
+    cp_r @firmware_dir+"ROMFS/px4fmu_common/mixers", "./"
 
     #generate rc file
     rc1 ||= File.read(rc_script)
     rc = rc1.sub('param set MAV_TYPE',"param set MAV_SYS_ID #{m_num}\nparam set MAV_TYPE")
-    rc.sub!('ROMFS/px4fmu_common/mixers/','')
+    rc.sub!('ROMFS/px4fmu_common/','')
     unless opts[:logging]
       rc.sub!(/sdlog2 start.*\n/,'')
       rc.sub!(/logger start.*\n/,'')
@@ -66,7 +66,7 @@ def create_fcu_files(opts,m_num)
     rc.gsub!("-r 4000000","-r #{opts[:rate]}")
 
     rc.gsub!("-u 14556","-u #{@mav_port}")
-    rc.sub!("mavlink start -u #{@mav_port}","mavlink start -u #{@mav_port} -o #{@mav_oport}")
+    rc.sub!("mavlink start -x -u #{@mav_port}","mavlink start -x -u #{@mav_port} -o #{@mav_oport}")
 
     rc.sub!("-u 14557","-u #{@mav_port2}")
     rc.sub!("-r 250 -s HIGHRES_IMU -u #{@mav_port}", "-r #{opts[:imu_rate]} -s HIGHRES_IMU -u #{@mav_port2}") if opts[:imu_rate]
@@ -197,7 +197,7 @@ sleep 1
 
 unless File.exist?(px4_dir + px4_fname)
   mkdir_p px4_dir
-  cp @firmware_dir + "build_posix_sitl_default/src/firmware/posix/" + px4_fname, px4_dir
+  cp @firmware_dir + "build/posix_sitl_default/" + px4_fname, px4_dir
 end
 
 

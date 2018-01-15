@@ -1,19 +1,18 @@
 #!/bin/bash
 
-dir=`pwd`/`dirname $0`/../
+dir=`pwd`/`dirname $0`/..
 
 cd $dir
-git submodule update --init --remote
 
 #px4
 
-cd $dir/Firmware
+cd $dir/../../
 make clean
 make posix_sitl_default
 
 #sitl_gazebo
 
-cd $dir/sitl_gazebo
+cd $dir/../sitl_gazebo
 
 git submodule update --init --recursive
 
