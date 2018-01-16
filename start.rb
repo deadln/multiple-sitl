@@ -28,7 +28,7 @@ opts = { model: "iris", num: 1, rate: 10000, filter: "ekf2" , workspace: "worksp
 
 #sitl_gazebo
 world_fname = "default.world"
-models_opts_fname = "options.xml"
+models_opts_fname = "default.xml"
 model_opts_open = "<?xml version=\"1.0\" ?>
 <options>\n"
 model_opts_close = '</options>'
@@ -123,6 +123,10 @@ op = OptionParser.new do |op|
 
   op.on("--hitl", "HITL mode") do
     opts[:hitl] = true
+  end
+
+  op.on("--nohilstate", "no HIL_STATE_QUATERNION message") do
+    opts[:nohilstate] = true
   end
 
   op.on("--restart", "soft restart") do
@@ -251,6 +255,7 @@ opts[:num].times do |i|
   model_opts += "    <gps_update_interval>#{opts[:gps_interval]}</gps_update_interval>\n"  if opts[:gps_interval]
   model_opts += "    <imu_rate>#{opts[:imu_rate]}</imu_rate>\n"  if opts[:imu_rate]
   model_opts += "    <hil_gps_port>#{@hil_gps_port}</hil_gps_port>\n" if opts[:hil_gps]
+  model_opts += "    <hil_state>false</hil_state>\n" if opts[:nohilstate]
   model_opts += "  </model>\n"
 
   cd("mavros") {
