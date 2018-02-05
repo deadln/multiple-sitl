@@ -15,7 +15,7 @@ apt-get install libopencv-dev libeigen3-dev protobuf-compiler libprotobuf-dev li
 apt-get install python-argparse git-core wget zip python-empy cmake build-essential genromfs -y
 
 #start script
-apt-get install ruby -y
+apt-get install ruby xterm -y
 
 #clean
 apt-get clean
