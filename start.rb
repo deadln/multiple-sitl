@@ -9,8 +9,8 @@ base_port=15010
 port_step=10
 distance=2
 px4_dir="px4dir"
-firmware_dir = "../.."
-sitl_gazebo_dir = "../sitl_gazebo"
+firmware_dir = "Firmware"
+sitl_gazebo_dir = "sitl_gazebo"
 
 #script dir
 @root_dir = __dir__ + '/'
