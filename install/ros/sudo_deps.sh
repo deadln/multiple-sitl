@@ -10,6 +10,7 @@ apt-get install ros-${ros_release}-ros-base -y
 
 #mavros
 apt-get install ros-${ros_release}-mavros python-prettytable -y
+/opt/ros/${ros_release}/lib/mavros/install_geographiclib_datasets.sh
 
 #catkin
 apt-get install python-wstool python-catkin-tools -y
