@@ -19,12 +19,11 @@ px4_fname="px4"
 @current_dir = Dir.pwd + '/'
 
 #options
-all_model_names = ["iris", "iris_opt_flow"]
 opts = {
-  model: "iris",
-  num: 1,
-  rate: 10000,
-  filter: "ekf2",
+  m: "iris",
+  n: 1,
+  r: 10000,
+  f: "ekf2",
   workspace: "workspace",
   gazebo: "gazebo",
   catkin_ws: "workspace/catkin_ws",
@@ -48,7 +47,7 @@ def xspawn(term_name, cmd, debug)
 end
 
 def create_fcu_files(opts,m_num)
-  rc_script = @firmware_dir + "posix-configs/SITL/init/#{opts[:filter]}/#{opts[:model]}"
+  rc_script = @firmware_dir + "posix-configs/SITL/init/#{opts[:f]}/#{opts[:m]}"
   @rc_file="rcS#{m_num}"
 
   unless File.exist?(@rc_file)
@@ -66,11 +65,11 @@ def create_fcu_files(opts,m_num)
       rc.sub!(/sdlog2 start.*\n/,'')
       rc.sub!(/logger start.*\n/,'')
     end
-    rc.sub!(/.*OPTICAL_FLOW_RAD.*\n/,'') if opts[:model]=="iris"
+    rc.sub!(/.*OPTICAL_FLOW_RAD.*\n/,'') if opts[:m]=="iris"
 
     rc.sub!(/simulator start -s.*$/,"simulator start -s -u #{@sim_port}")
 
-    rc.gsub!("-r 4000000","-r #{opts[:rate]}")
+    rc.gsub!("-r 4000000","-r #{opts[:r]}")
 
     rc.gsub!("-u 14556","-u #{@mav_port}")
     rc.sub!("mavlink start -x -u #{@mav_port}","mavlink start -x -u #{@mav_port} -o #{@mav_oport}")
@@ -88,89 +87,35 @@ end
 op = OptionParser.new do |op|
   op.banner = "Usage: #{__FILE__} [options] [world_file]"
 
-  op.on("-m MODEL", all_model_names, all_model_names.join(", ")) do |m|
-    opts[:model] = m
-  end
+  op.on("-n NUM", Integer, "number of instances") { |p| opts[:n] = p }
+  op.on("-r RATE", Integer, "px4 data rate") { |p| opts[:r] = p }
+  op.on("-f FILTER", "filter") { |p| opts[:f] = p }
+  op.on("-m MODEL", "model name") { |p| opts[:m] = p }
 
-  op.on("--gazebo_model MODEL", "gazebo model name") do |p|
-    opts[:gazebo_model] = p
-  end
-
-  op.on("-n NUM", Integer, "number of instances") do |n|
-    opts[:num] = n
-  end
-
-  op.on("-r RATE", Integer, "px4 data rate") do |r|
-    opts[:rate] = r
-  end
-
-  op.on("--imu_rate IMU_RATE", Integer, "imu rate") do |p|
-    opts[:imu_rate] = p
-  end
-
-  op.on("--hil_gps", "turn on hil_gps mode") do
-    opts[:hil_gps] = true
-  end
-
-  op.on("--plugin_lists PATH", "path to mavros pluginlists.yaml") do |p|
-    opts[:plugin_lists] = p
-  end
-
-  op.on("-f FILTER", "filter") do |o|
-    opts[:filter] = o
-  end
-
-  op.on("--logging", "turn on logging") do
-    opts[:logging] = true
-  end
+  op.on("--gazebo_model MODEL", "gazebo model name") { |p| opts[:gazebo_model] = p }
+  op.on("--imu_rate IMU_RATE", Integer, "imu rate") { |p| opts[:imu_rate] = p }
+  op.on("--hil_gps", "turn on hil_gps mode") { opts[:hil_gps] = true }
+  op.on("--plugin_lists PATH", "path to mavros pluginlists.yaml") { |p| opts[:plugin_lists] = p }
+  op.on("--logging", "turn on logging") { opts[:logging] = true }
+  op.on("--debug", "debug mode") { opts[:debug] = true }
+  op.on("--nomavros", "without mavros") { opts[:nomavros] = true }
+  op.on("--workspace PATH", "path to workspace") { |p| opts[:workspace] = p }
+  op.on("--gazebo PATH", "path to gazebo resources") { |p| opts[:gazebo] = p }
+  op.on("--catkin_ws PATH", "path to catkin workspace") { |p| opts[:catkin_ws] = p }
+  op.on("--base_port PORT", Integer, "base port") { |p| opts[:base_port] = p }
+  op.on("--port_step STEP", Integer, "port step") { |p| opts[:port_step] = p }
+  op.on("--distance DISTANCE", Integer, "distance between models") { |p| opts[:distance] = p }
+  op.on("--firmware_in PATH", "relative path to #{firmware_dir}") { |p| opts[:firmware_in] = p }
+  op.on("--sitl_gazebo_in PATH", "relative path to #{sitl_gazebo_dir}") { |p| opts[:sitl_gazebo_in] = p }
 
   op.on("--restart", "soft restart") do
     opts[:restart] = true
     puts "restarting ..."
   end
 
-  op.on("--debug", "debug") do
-    opts[:debug] = true
-  end
-
-  op.on("--nomavros", "without mavros") do
-    opts[:nomavros] = true
-  end
-
-  op.on("--workspace PATH", "path to workspace") do |p|
-    opts[:workspace] = p
-  end
-
-  op.on("--gazebo PATH", "path to gazebo resources") do |p|
-    opts[:gazebo] = p
-  end
-
-  op.on("--catkin_ws PATH", "path to catkin workspace") do |p|
-    opts[:catkin_ws] = p
-  end
-
-  op.on("--base_port PORT", Integer, "base port") do |p|
-    opts[:base_port] = p
-  end
-
-  op.on("--port_step STEP", Integer, "port step") do |p|
-    opts[:port_step] = p
-  end
-
-  op.on("--distance DISTANCE", Integer, "distance between models") do |p|
-    opts[:distance] = p
-  end
-
-  op.on("--firmware_in PATH", "relative path to #{firmware_dir}") do |p|
-    opts[:firmware_in] = p
-  end
-
-  op.on("--sitl_gazebo_in PATH", "relative path to #{sitl_gazebo_dir}") do |p|
-    opts[:sitl_gazebo_in] = p
-  end
-
-  op.on("-h", "help") do
+  op.on("-h", "help and show defaults") do
     puts op
+    puts "Defaults: #{opts}"
     exit
   end
 end
@@ -179,13 +124,13 @@ op.parse!
 @firmware_dir = @root_dir + opts[:firmware_in] + firmware_dir + '/'
 sitl_gazebo_dir = @root_dir + opts[:sitl_gazebo_in] + sitl_gazebo_dir
 
-opts[:world] = ARGV[0] ? File.expand_path(ARGV[0], @current_dir) : sitl_gazebo_dir + "/worlds/#{opts[:model]}.world"
+opts[:world] = ARGV[0] ? File.expand_path(ARGV[0], @current_dir) : sitl_gazebo_dir + "/worlds/#{opts[:m]}.world"
 unless File.exist?(opts[:world])
   puts "#{opts[:world]} not exist"
   exit
 end
 
-gazebo_model = opts[:gazebo_model] || opts[:model]
+gazebo_model = opts[:gazebo_model] || opts[:m]
 
 opts[:workspace] = File.expand_path(opts[:workspace], @current_dir) + "/"
 opts[:gazebo] = File.expand_path(opts[:gazebo], @current_dir)
@@ -222,7 +167,7 @@ world_sdf.sub!(/\n[^<]*<include>[^<]*<uri>model:\/\/iris[^<]*<\/uri>.*?<\/includ
 
 model_incs = ""
 model_opts = ""
-opts[:num].times do |i|
+opts[:n].times do |i|
   x=i*opts[:distance]
   m_index=i
   m_num=i+1
@@ -235,7 +180,7 @@ opts[:num].times do |i|
 
   @sim_port = @mav_port + 9
 
-  @bridge_port = @mav_port + 2000
+  @gcs_inport = @mav_port + 2000
 
   model_name="#{gazebo_model}#{m_num}"
 
@@ -267,7 +212,7 @@ opts[:num].times do |i|
     sleep 1
 
     pl="plugin_lists:=#{opts[:plugin_lists]}" if opts[:plugin_lists]
-    launch_opts = "fcu_url:=udp://127.0.0.1:#{@mav_oport2}@127.0.0.1:#{@mav_port2} gcs_inport:=#{@bridge_port}"
+    launch_opts = "fcu_url:=udp://127.0.0.1:#{@mav_oport2}@127.0.0.1:#{@mav_port2} gcs_inport:=#{@gcs_inport}"
 
     xspawn("mavros-#{m_num}", "./roslaunch.sh #{opts[:catkin_ws]} num:=#{m_num} #{pl} #{launch_opts}", opts[:debug])
 
