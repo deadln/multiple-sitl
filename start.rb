@@ -20,10 +20,10 @@ px4_fname="px4"
 
 #options
 opts = {
-  m: "iris",
   n: 1,
   r: 10000,
   f: "ekf2",
+  gazebo_model: "iris",
   workspace: "workspace",
   gazebo: "gazebo",
   catkin_ws: "workspace/catkin_ws",
@@ -47,7 +47,12 @@ def xspawn(term_name, cmd, debug)
 end
 
 def create_fcu_files(opts,m_num)
-  rc_script = @firmware_dir + "posix-configs/SITL/init/#{opts[:f]}/#{opts[:m]}"
+  rc_script = @firmware_dir + "posix-configs/SITL/init/#{opts[:f]}/#{opts[:i] || opts[:gazebo_model]}"
+  unless File.exist?(rc_script)
+    puts "#{rc_script} does not exist, use valid -f, -i, --gazebo_model options"
+    exit
+  end
+
   @rc_file="rcS#{m_num}"
 
   unless File.exist?(@rc_file)
@@ -65,7 +70,7 @@ def create_fcu_files(opts,m_num)
       rc.sub!(/sdlog2 start.*\n/,'')
       rc.sub!(/logger start.*\n/,'')
     end
-    rc.sub!(/.*OPTICAL_FLOW_RAD.*\n/,'') if opts[:m]=="iris"
+    rc.sub!(/.*OPTICAL_FLOW_RAD.*\n/,'') unless opts[:optical_flow]
 
     rc.sub!(/simulator start -s.*$/,"simulator start -s -u #{@sim_port}")
 
@@ -89,10 +94,10 @@ op = OptionParser.new do |op|
 
   op.on("-n NUM", Integer, "number of instances") { |p| opts[:n] = p }
   op.on("-r RATE", Integer, "px4 data rate") { |p| opts[:r] = p }
-  op.on("-f FILTER", "filter") { |p| opts[:f] = p }
-  op.on("-m MODEL", "model name") { |p| opts[:m] = p }
+  op.on("-f FILTER", "px4 filter") { |p| opts[:f] = p }
+  op.on("-i NAME", "px4 model init file") { |p| opts[:i] = p }
 
-  op.on("--gazebo_model MODEL", "gazebo model name") { |p| opts[:gazebo_model] = p }
+  op.on("--gazebo_model NAME", "gazebo model name") { |p| opts[:gazebo_model] = p }
   op.on("--imu_rate IMU_RATE", Integer, "imu rate") { |p| opts[:imu_rate] = p }
   op.on("--hil_gps", "turn on hil_gps mode") { opts[:hil_gps] = true }
   op.on("--plugin_lists PATH", "path to mavros pluginlists.yaml") { |p| opts[:plugin_lists] = p }
@@ -107,6 +112,7 @@ op = OptionParser.new do |op|
   op.on("--distance DISTANCE", Integer, "distance between models") { |p| opts[:distance] = p }
   op.on("--firmware_in PATH", "relative path to #{firmware_dir}") { |p| opts[:firmware_in] = p }
   op.on("--sitl_gazebo_in PATH", "relative path to #{sitl_gazebo_dir}") { |p| opts[:sitl_gazebo_in] = p }
+  op.on("--optical_flow", "turn on optical flow") { opts[:optical_flow] = true }
 
   op.on("--restart", "soft restart") do
     opts[:restart] = true
@@ -124,13 +130,11 @@ op.parse!
 @firmware_dir = @root_dir + opts[:firmware_in] + firmware_dir + '/'
 sitl_gazebo_dir = @root_dir + opts[:sitl_gazebo_in] + sitl_gazebo_dir
 
-opts[:world] = ARGV[0] ? File.expand_path(ARGV[0], @current_dir) : sitl_gazebo_dir + "/worlds/#{opts[:m]}.world"
+opts[:world] = ARGV[0] ? File.expand_path(ARGV[0], @current_dir) : sitl_gazebo_dir + "/worlds/#{opts[:gazebo_model]}.world"
 unless File.exist?(opts[:world])
-  puts "#{opts[:world]} not exist"
+  puts "#{opts[:world]} does not exist, use valid --gazebo_model option or set world_file directly"
   exit
 end
-
-gazebo_model = opts[:gazebo_model] || opts[:m]
 
 opts[:workspace] = File.expand_path(opts[:workspace], @current_dir) + "/"
 opts[:gazebo] = File.expand_path(opts[:gazebo], @current_dir)
@@ -182,7 +186,7 @@ opts[:n].times do |i|
 
   @gcs_inport = @mav_port + 2000
 
-  model_name="#{gazebo_model}#{m_num}"
+  model_name="#{opts[:gazebo_model]}#{m_num}"
 
   cd(px4_dir) {
     mkdir_p model_name
@@ -198,7 +202,7 @@ opts[:n].times do |i|
   #generate model
   n = "<name>#{model_name}</name>"
   model_incs += "    <include>
-      <uri>model://#{gazebo_model}</uri>
+      <uri>model://#{opts[:gazebo_model]}</uri>
       <pose>#{x} 0 0 0 0 0</pose>
       #{n}
     </include>\n" unless world_sdf.include?(n)
