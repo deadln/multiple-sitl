@@ -97,10 +97,6 @@ op = OptionParser.new do |op|
     opts[:rate] = r
   end
 
-  op.on("-g INTERVAL", Float, "gps update interval") do |g|
-    opts[:gps_interval] = g
-  end
-
   op.on("--imu_rate IMU_RATE", Integer, "imu rate") do |p|
     opts[:imu_rate] = p
   end
@@ -252,7 +248,6 @@ opts[:num].times do |i|
   model_opts += "  <model>
     <name>#{model_name}</name>
     <mavlink_udp_port>#{@sim_port}</mavlink_udp_port>\n"
-  model_opts += "    <gps_update_interval>#{opts[:gps_interval]}</gps_update_interval>\n"  if opts[:gps_interval]
   model_opts += "    <imu_rate>#{opts[:imu_rate]}</imu_rate>\n"  if opts[:imu_rate]
   model_opts += "    <hil_gps_port>#{@hil_gps_port}</hil_gps_port>\n" if opts[:hil_gps]
   model_opts += "    <hil_state>false</hil_state>\n" if opts[:nohilstate]
