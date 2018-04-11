@@ -36,8 +36,6 @@ opts = {
 }
 
 #sitl_gazebo
-world_fname = "default.world"
-models_opts_fname = "default.xml"
 model_opts_open = "<?xml version=\"1.0\" ?>
 <options>\n"
 model_opts_close = '</options>'
@@ -215,6 +213,11 @@ end
 
 
 world_sdf = File.read(opts[:world])
+
+world_name = world_sdf[/<world name="(.*)">/, 1]
+world_fname = "#{world_name}.world"
+models_opts_fname = "#{world_name}.xml"
+
 world_sdf.sub!(/\n[^<]*<include>[^<]*<uri>model:\/\/iris[^<]*<\/uri>.*?<\/include>/m, "")
 
 model_incs = ""
