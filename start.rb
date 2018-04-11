@@ -121,10 +121,6 @@ op = OptionParser.new do |op|
     opts[:hitl] = true
   end
 
-  op.on("--nohilstate", "no HIL_STATE_QUATERNION message") do
-    opts[:nohilstate] = true
-  end
-
   op.on("--restart", "soft restart") do
     opts[:restart] = true
     puts "restarting ..."
@@ -219,7 +215,6 @@ opts[:num].times do |i|
   @mav_oport = @mav_port + 5
   @mav_oport2 = @mav_port + 6
 
-  @hil_gps_port = @mav_port + 8
   @sim_port = @mav_port + 9
 
   @bridge_port = @mav_port + 2000
@@ -248,9 +243,6 @@ opts[:num].times do |i|
   model_opts += "  <model>
     <name>#{model_name}</name>
     <mavlink_udp_port>#{@sim_port}</mavlink_udp_port>\n"
-  model_opts += "    <imu_rate>#{opts[:imu_rate]}</imu_rate>\n"  if opts[:imu_rate]
-  model_opts += "    <hil_gps_port>#{@hil_gps_port}</hil_gps_port>\n" if opts[:hil_gps]
-  model_opts += "    <hil_state>false</hil_state>\n" if opts[:nohilstate]
   model_opts += "  </model>\n"
 
   cd("mavros") {
