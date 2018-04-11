@@ -28,7 +28,6 @@ opts = {
   workspace: "workspace",
   gazebo: "gazebo",
   catkin_ws: "workspace/catkin_ws",
-  rosinstall: "deps.rosinstall",
   base_port: 15010,
   port_step: 10,
   distance: 2,
@@ -150,10 +149,6 @@ op = OptionParser.new do |op|
     opts[:catkin_ws] = p
   end
 
-  op.on("--rosinstall PATH", "path to rosinstall file") do |p|
-    opts[:rosinstall] = p
-  end
-
   op.on("--base_port PORT", Integer, "base port") do |p|
     opts[:base_port] = p
   end
@@ -195,17 +190,12 @@ gazebo_model = opts[:gazebo_model] || opts[:model]
 opts[:workspace] = File.expand_path(opts[:workspace], @current_dir) + "/"
 opts[:gazebo] = File.expand_path(opts[:gazebo], @current_dir)
 opts[:catkin_ws] = File.expand_path(opts[:catkin_ws], @current_dir)
-opts[:rosinstall] = File.expand_path(opts[:rosinstall], @current_dir)
 opts[:plugin_lists] = File.expand_path(opts[:plugin_lists], @current_dir) if opts[:plugin_lists]
 
 px4_dir = opts[:workspace] + px4_dir + "/"
 
 #init
 cd @root_dir
-
-if File.exist?(opts[:rosinstall]) and not Dir.exist?(opts[:catkin_ws])
-  system("./install/catkin_prepare.sh #{opts[:catkin_ws]} #{opts[:rosinstall]}")
-end
 
 if opts[:restart]
   system("./kill_px4.sh")
