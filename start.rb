@@ -117,10 +117,6 @@ op = OptionParser.new do |op|
     opts[:logging] = true
   end
 
-  op.on("--hitl", "HITL mode") do
-    opts[:hitl] = true
-  end
-
   op.on("--restart", "soft restart") do
     opts[:restart] = true
     puts "restarting ..."
@@ -207,8 +203,6 @@ opts[:num].times do |i|
   m_index=i
   m_num=i+1
 
-  next if opts[:hitl] and opts[:num] != m_num
-
   @mav_port = base_port + m_index*port_step
   @mav_port2 = @mav_port + 1
 
@@ -230,7 +224,7 @@ opts[:num].times do |i|
       #run px4
       xspawn("px4-#{m_num}", "../#{px4_fname} -d #{@rc_file}", opts[:debug])
     }
-  } unless opts[:hitl]
+  }
 
   #generate model
   n = "<name>#{model_name}</name>"
@@ -249,7 +243,7 @@ opts[:num].times do |i|
     sleep 1
 
     pl="plugin_lists:=#{opts[:plugin_lists]}" if opts[:plugin_lists]
-    launch_opts = opts[:hitl] ? "bridge_on:=true bridge_inport:=#{@bridge_port} fcu_url:=/dev/ttyACM0:921600 gcs_inport:=#{@sim_port}" : "fcu_url:=udp://127.0.0.1:#{@mav_oport2}@127.0.0.1:#{@mav_port2} gcs_inport:=#{@bridge_port}"
+    launch_opts = "fcu_url:=udp://127.0.0.1:#{@mav_oport2}@127.0.0.1:#{@mav_port2} gcs_inport:=#{@bridge_port}"
 
     xspawn("mavros-#{m_num}", "./roslaunch.sh #{opts[:catkin_ws]} num:=#{m_num} #{pl} #{launch_opts}", opts[:debug])
 
