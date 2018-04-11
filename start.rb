@@ -6,18 +6,17 @@ require 'fileutils'
 include FileUtils
 
 px4_dir="px4dir"
-firmware_dir = "../.."
-sitl_gazebo_dir = "../sitl_gazebo"
+
+sitl_gazebo_dir = "sitl_gazebo"
+firmware_dir = "Firmware"
+px4_fname="px4"
+
 
 #script dir
 @root_dir = __dir__ + '/'
 
 #current dir
 @current_dir = Dir.pwd + '/'
-
-#Firmware
-px4_fname="px4"
-@firmware_dir = @root_dir + firmware_dir + '/'
 
 #options
 all_model_names = ["iris", "iris_opt_flow"]
@@ -32,7 +31,9 @@ opts = {
   rosinstall: "deps.rosinstall",
   base_port: 15010,
   port_step: 10,
-  distance: 2
+  distance: 2,
+  firmware_in: "../../../",
+  sitl_gazebo_in: "../"
 }
 
 #sitl_gazebo
@@ -165,6 +166,14 @@ op = OptionParser.new do |op|
     opts[:distance] = p
   end
 
+  op.on("--firmware_in PATH", "relative path to #{firmware_dir}") do |p|
+    opts[:firmware_in] = p
+  end
+
+  op.on("--sitl_gazebo_in PATH", "relative path to #{sitl_gazebo_dir}") do |p|
+    opts[:sitl_gazebo_in] = p
+  end
+
   op.on("-h", "help") do
     puts op
     exit
@@ -172,8 +181,9 @@ op = OptionParser.new do |op|
 end
 op.parse!
 
+@firmware_dir = @root_dir + opts[:firmware_in] + firmware_dir + '/'
+sitl_gazebo_dir = @root_dir + opts[:sitl_gazebo_in] + sitl_gazebo_dir
 
-sitl_gazebo_dir = @root_dir + sitl_gazebo_dir
 opts[:world] = ARGV[0] ? File.expand_path(ARGV[0], @current_dir) : sitl_gazebo_dir + "/worlds/#{opts[:model]}.world"
 unless File.exist?(opts[:world])
   puts "#{opts[:world]} not exist"
