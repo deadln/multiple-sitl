@@ -5,9 +5,6 @@ require 'fileutils'
 
 include FileUtils
 
-base_port=15010
-port_step=10
-distance=2
 px4_dir="px4dir"
 firmware_dir = "../.."
 sitl_gazebo_dir = "../sitl_gazebo"
@@ -24,7 +21,19 @@ px4_fname="px4"
 
 #options
 all_model_names = ["iris", "iris_opt_flow"]
-opts = { model: "iris", num: 1, rate: 10000, filter: "ekf2" , workspace: "workspace", gazebo: "gazebo", catkin_ws: "workspace/catkin_ws", rosinstall: "deps.rosinstall"}
+opts = {
+  model: "iris",
+  num: 1,
+  rate: 10000,
+  filter: "ekf2",
+  workspace: "workspace",
+  gazebo: "gazebo",
+  catkin_ws: "workspace/catkin_ws",
+  rosinstall: "deps.rosinstall",
+  base_port: 15010,
+  port_step: 10,
+  distance: 2
+}
 
 #sitl_gazebo
 world_fname = "default.world"
@@ -146,6 +155,18 @@ op = OptionParser.new do |op|
     opts[:rosinstall] = p
   end
 
+  op.on("--base_port PORT", Integer, "base port") do |p|
+    opts[:base_port] = p
+  end
+
+  op.on("--port_step STEP", Integer, "port step") do |p|
+    opts[:port_step] = p
+  end
+
+  op.on("--distance DISTANCE", Integer, "distance between models") do |p|
+    opts[:distance] = p
+  end
+
   op.on("-h", "help") do
     puts op
     exit
@@ -194,16 +215,16 @@ end
 
 
 world_sdf = File.read(opts[:world])
-world_sdf.sub!(/.*<include>.*\n.*<uri>model:\/\/iris.*<\/uri>.*\n.*<\/include>.*\n/, "")
+world_sdf.sub!(/\n[^<]*<include>[^<]*<uri>model:\/\/iris[^<]*<\/uri>.*?<\/include>/m, "")
 
 model_incs = ""
 model_opts = ""
 opts[:num].times do |i|
-  x=i*distance
+  x=i*opts[:distance]
   m_index=i
   m_num=i+1
 
-  @mav_port = base_port + m_index*port_step
+  @mav_port = opts[:base_port] + m_index*opts[:port_step]
   @mav_port2 = @mav_port + 1
 
   @mav_oport = @mav_port + 5
