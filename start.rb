@@ -5,15 +5,20 @@ require 'fileutils'
 
 include FileUtils
 
-px4_dir="px4dir"
+rels = {
+  firmware: "../../../Firmware",
+  sitl_gazebo: "../sitl_gazebo",
 
-sitl_gazebo_dir = "sitl_gazebo"
-firmware_dir = "Firmware"
-px4_fname="px4"
+  firmware_bin: "build/posix_sitl_default/px4",
+  firmware_mixers: "ROMFS/px4fmu_common/mixers",
 
+  workspace_firmware: "fw"
+}
 
 #script dir
-@root_dir = __dir__ + '/'
+abs = {
+  home: __dir__
+}
 
 #options
 opts = {
@@ -21,14 +26,13 @@ opts = {
   r: 10000,
   f: "ekf2",
   gazebo_model: "iris",
-  workspace: "workspace",
-  gazebo: "gazebo",
-  catkin_ws: "workspace/catkin_ws",
   base_port: 15010,
   port_step: 10,
   distance: 2,
-  firmware_in: "../../../",
-  sitl_gazebo_in: "../"
+
+  workspace: "workspace",
+  gazebo: "gazebo",
+  catkin_ws: "workspace/catkin_ws",
 }
 
 #sitl_gazebo
@@ -43,18 +47,18 @@ def xspawn(term_name, cmd, debug)
   Process.detach(pid)
 end
 
-def create_fcu_files(opts,m_num)
-  @rc_file="rcS#{m_num}"
+def create_fcu_files(opts, m_num, mixers_dir, init_str)
+  rc_file="rcS#{m_num}"
 
-  unless File.exist?(@rc_file)
+  unless File.exist?(rc_file)
     mkdir_p "rootfs/fs/microsd"
     mkdir_p "rootfs/eeprom"
     touch "rootfs/eeprom/parameters"
 
-    cp_r @mixers_dir, "./"
+    cp_r mixers_dir, "./"
 
     #generate rc file
-    rc = @firmware_init_str.sub('param set MAV_TYPE',"param set MAV_SYS_ID #{m_num}\nparam set MAV_TYPE")
+    rc = init_str.sub('param set MAV_TYPE',"param set MAV_SYS_ID #{m_num}\nparam set MAV_TYPE")
     rc.sub!('ROMFS/px4fmu_common/','')
     unless opts[:logging]
       rc.sub!(/sdlog2 start.*\n/,'')
@@ -74,15 +78,17 @@ def create_fcu_files(opts,m_num)
     rc.sub!("-o 14540","-o #{@mav_oport2}")
     rc.sub!("gpssim start","param set MAV_USEHILGPS 1") if opts[:hil_gps]
 
-    File.open(@rc_file, 'w') { |out| out << rc }
+    File.open(rc_file, 'w') { |out| out << rc }
   end
+
+  rc_file
 end
 
 def check_expanded_path(file_name, dir = nil, msg = nil)
   p = File.expand_path(file_name, dir)
 
   unless File.exist?(p)
-    puts "#{p} does not exist" + msg ? ", #{msg}" : ""
+    puts "#{p} does not exist" + (msg ? ", #{msg}" : "")
     exit
   end
 
@@ -111,9 +117,9 @@ op = OptionParser.new do |op|
   op.on("--base_port PORT", Integer, "base port") { |p| opts[:base_port] = p }
   op.on("--port_step STEP", Integer, "port step") { |p| opts[:port_step] = p }
   op.on("--distance DISTANCE", Integer, "distance between models") { |p| opts[:distance] = p }
-  op.on("--firmware_in PATH", "relative path to #{firmware_dir}") { |p| opts[:firmware_in] = p }
-  op.on("--sitl_gazebo_in PATH", "relative path to #{sitl_gazebo_dir}") { |p| opts[:sitl_gazebo_in] = p }
   op.on("--optical_flow", "turn on optical flow") { opts[:optical_flow] = true }
+  op.on("--firmware PATH", "path to firmware folder") { |p| opts[:firmware] = p }
+  op.on("--sitl_gazebo PATH", "path to sitl_gazebo folder") { |p| opts[:sitl_gazebo] = p }
 
   op.on("--restart", "soft restart") do
     opts[:restart] = true
@@ -122,31 +128,88 @@ op = OptionParser.new do |op|
 
   op.on("-h", "help and show defaults") do
     puts op
-    puts "Defaults: #{opts}"
-    exit
+    puts "\nDefault options: #{opts}"
+
+    opts[:help] = true
   end
 end
 op.parse!
+opts[:gazebo_world] = ARGV[0]
 
-#files and dirs
-@firmware_dir = check_expanded_path(opts[:firmware_in] + firmware_dir, @root_dir) + '/'
+#update rels
+rels.update({
+  firmware_init: "posix-configs/SITL/init/#{opts[:f]}/#{opts[:i] || opts[:gazebo_model]}",
+  gazebo_world: "worlds/#{opts[:gazebo_model]}.world"
+})
+msgs = {
+  firmware_init: "use valid -f, -i, --gazebo_model options",
+  gazebo_world: "invalid --gazebo_model option"
+}
 
-firmware_init_file = check_expanded_path("posix-configs/SITL/init/#{opts[:f]}/#{opts[:i] || opts[:gazebo_model]}", @firmware_dir, "use valid -f, -i, --gazebo_model options")
-@mixers_dir = check_expanded_path("ROMFS/px4fmu_common/mixers", @firmware_dir)
-firmware_file = check_expanded_path("build/posix_sitl_default/" + px4_fname, @firmware_dir)
+#do not check
+for sym in [:workspace, :gazebo, :catkin_ws]
+  abs[sym] = File.expand_path(opts[sym])
+end
 
-sitl_gazebo_dir = check_expanded_path(opts[:sitl_gazebo_in] + sitl_gazebo_dir, @root_dir)
+#check
+for sym in [:firmware, :sitl_gazebo, :plugin_lists, :gazebo_world]
+  abs[sym] = check_expanded_path(opts[sym]) if opts[sym]
+end
 
-opts[:world] = ARGV[0] ? check_expanded_path(ARGV[0]) : check_expanded_path("worlds/#{opts[:gazebo_model]}.world", sitl_gazebo_dir, "invalid --gazebo_model option")
-opts[:workspace] = File.expand_path(opts[:workspace]) + "/"
-opts[:gazebo] = File.expand_path(opts[:gazebo])
-opts[:catkin_ws] = File.expand_path(opts[:catkin_ws])
-opts[:plugin_lists] = File.expand_path(opts[:plugin_lists]) if opts[:plugin_lists]
+#set defaults if not set
+for sym in [:firmware, :sitl_gazebo]
+  abs[sym] = check_expanded_path(rels[sym], abs[:home]) unless abs[sym]
+end
 
-px4_dir = opts[:workspace] + px4_dir + "/"
+#check firmware paths
+for sym in [:firmware_mixers, :firmware_bin, :firmware_init]
+  abs[sym] = check_expanded_path(rels[sym], abs[:firmware], msgs[sym])
+end
+
+#get gazebo world file
+unless abs[:gazebo_world]
+  a = []
+  for sym in [:gazebo, :sitl_gazebo]
+    a << abs[sym]
+    ap = File.expand_path(rels[:gazebo_world], abs[sym])
+    if File.exist?(ap)
+      abs[:gazebo_world] = ap
+      break
+    end
+  end
+
+  unless abs[:gazebo_world]
+    puts msgs[:gazebo_world] + ", " +rels[:gazebo_world] + " does not exist in " + a.join(", ")
+    exit
+  end
+end
+
+#contents
+contents = {}
+for sym in [:firmware_init, :gazebo_world]
+  contents[sym] = File.read(abs[sym])
+end
+world_name = contents[:gazebo_world][/<world name="(.*)">/, 1]
+contents[:gazebo_world].sub!(/\n[^<]*<include>[^<]*<uri>model:\/\/iris[^<]*<\/uri>.*?<\/include>/m, "")
+
+#workspace
+rels.update({
+  workspace_world: world_name + ".world",
+  workspace_opts: world_name + ".xml"
+})
+
+for sym in [:workspace_firmware, :workspace_world, :workspace_opts]
+  abs[sym] = File.expand_path(rels[sym], abs[:workspace])
+end
+
+if opts[:help]
+  puts "\nDefault absolute paths: #{abs}"
+  puts
+  exit
+end
 
 #init
-cd @root_dir
+cd abs[:home]
 
 if opts[:restart]
   system("./kill_px4.sh")
@@ -157,23 +220,14 @@ sleep 1
 
 #start
 
-unless File.exist?(px4_dir + px4_fname)
-  mkdir_p px4_dir
-  cp firmware_file, px4_dir
+fw_name = rels[:firmware_bin].split('/').last
+unless File.exist?(abs[:workspace_firmware] + '/' + fw_name)
+  mkdir_p abs[:workspace_firmware]
+  cp abs[:firmware_bin], abs[:workspace_firmware]
 end
-
-
-world_sdf = File.read(opts[:world])
-
-world_name = world_sdf[/<world name="(.*)">/, 1]
-world_fname = "#{world_name}.world"
-models_opts_fname = "#{world_name}.xml"
-
-world_sdf.sub!(/\n[^<]*<include>[^<]*<uri>model:\/\/iris[^<]*<\/uri>.*?<\/include>/m, "")
 
 model_incs = ""
 model_opts = ""
-@firmware_init_str = File.read(firmware_init_file)
 opts[:n].times do |i|
   x=i*opts[:distance]
   m_index=i
@@ -191,37 +245,30 @@ opts[:n].times do |i|
 
   model_name="#{opts[:gazebo_model]}#{m_num}"
 
-  cd(px4_dir) {
+  cd(abs[:workspace_firmware]) {
     mkdir_p model_name
 
     cd(model_name) {
-      create_fcu_files(opts,m_num)
+      rc_file = create_fcu_files(opts, m_num, abs[:firmware_mixers], contents[:firmware_init])
 
-      #run px4
-      xspawn("px4-#{m_num}", "../#{px4_fname} -d #{@rc_file}", opts[:debug])
+      #run firmware
+      xspawn("#{fw_name}-#{m_num}", "../#{fw_name} -d #{rc_file}", opts[:debug])
     }
   }
 
   #generate model
   n = "<name>#{model_name}</name>"
-  model_incs += "    <include>
-      <uri>model://#{opts[:gazebo_model]}</uri>
-      <pose>#{x} 0 0 0 0 0</pose>
-      #{n}
-    </include>\n" unless world_sdf.include?(n)
 
-  model_opts += "  <model>
-    <name>#{model_name}</name>
-    <mavlink_udp_port>#{@sim_port}</mavlink_udp_port>\n"
-  model_opts += "  </model>\n"
+  model_incs += "    <include>#{n}<uri>model://#{opts[:gazebo_model]}</uri><pose>#{x} 0 0 0 0 0</pose></include>\n" unless contents[:gazebo_world].include?(n)
+  model_opts += "  <model>#{n}<mavlink_udp_port>#{@sim_port}</mavlink_udp_port></model>\n"
 
   cd("mavros") {
     sleep 1
 
-    pl="plugin_lists:=#{opts[:plugin_lists]}" if opts[:plugin_lists]
+    pl="plugin_lists:=#{abs[:plugin_lists]}" if abs[:plugin_lists]
     launch_opts = "fcu_url:=udp://127.0.0.1:#{@mav_oport2}@127.0.0.1:#{@mav_port2} gcs_inport:=#{@gcs_inport}"
 
-    xspawn("mavros-#{m_num}", "./roslaunch.sh #{opts[:catkin_ws]} num:=#{m_num} #{pl} #{launch_opts}", opts[:debug])
+    xspawn("mavros-#{m_num}", "./roslaunch.sh #{abs[:catkin_ws]} num:=#{m_num} #{pl} #{launch_opts}", opts[:debug])
 
   } unless opts[:restart] or opts[:nomavros]
 
@@ -230,15 +277,15 @@ end
 if opts[:restart]
   system("gz world -o")
 else
-  File.open(opts[:workspace] + models_opts_fname, 'w') do |out|
+  File.open(abs[:workspace_opts], 'w') do |out|
     out << model_opts_open
     out << model_opts
     out << model_opts_close
   end
 
   #run gzserver
-  File.open(opts[:workspace] + world_fname, 'w') do |out|
-    world_sdf.each_line {|l|
+  File.open(abs[:workspace_world], 'w') do |out|
+    contents[:gazebo_world].each_line {|l|
       out << l
       if l =~ /.*<world.*\n/
         out << model_incs
@@ -247,7 +294,7 @@ else
 
   end
 
-  cd(opts[:workspace]) {
-    xspawn("gazebo", "#{@root_dir}gazebo.sh #{world_fname} #{opts[:gazebo]} #{sitl_gazebo_dir}", opts[:debug])
+  cd(abs[:workspace]) {
+    xspawn("gazebo", abs[:home] + "/gazebo.sh #{rels[:workspace_world]} #{abs[:gazebo]} #{abs[:sitl_gazebo]}", opts[:debug])
   }
 end
