@@ -10,7 +10,6 @@ rels = {
   sitl_gazebo: "../sitl_gazebo",
 
   firmware_bin: "build/posix_sitl_default/px4",
-  firmware_mixers: "ROMFS/px4fmu_common/mixers",
 
   workspace_firmware: "fw"
 }
@@ -47,7 +46,7 @@ def xspawn(term_name, cmd, debug)
   Process.detach(pid)
 end
 
-def create_fcu_files(opts, m_num, mixers_dir, init_str)
+def create_fcu_files(opts, m_num, mix_file, rel_mix, init_str)
   rc_file="rcS#{m_num}"
 
   unless File.exist?(rc_file)
@@ -55,11 +54,11 @@ def create_fcu_files(opts, m_num, mixers_dir, init_str)
     mkdir_p "rootfs/eeprom"
     touch "rootfs/eeprom/parameters"
 
-    cp_r mixers_dir, "./"
+    cp mix_file, "./"
 
     #generate rc file
     rc = init_str.sub('param set MAV_TYPE',"param set MAV_SYS_ID #{m_num}\nparam set MAV_TYPE")
-    rc.sub!('ROMFS/px4fmu_common/','')
+    rc.sub!(File.dirname(rel_mix) + '/','')
     unless opts[:logging]
       rc.sub!(/sdlog2 start.*\n/,'')
       rc.sub!(/logger start.*\n/,'')
@@ -162,7 +161,7 @@ for sym in [:firmware, :sitl_gazebo]
 end
 
 #check firmware paths
-for sym in [:firmware_mixers, :firmware_bin, :firmware_init]
+for sym in [:firmware_bin, :firmware_init]
   abs[sym] = check_expanded_path(rels[sym], abs[:firmware], msgs[sym])
 end
 
@@ -192,11 +191,15 @@ end
 world_name = contents[:gazebo_world][/<world name="(.*)">/, 1]
 contents[:gazebo_world].sub!(/\n[^<]*<include>[^<]*<uri>model:\/\/iris[^<]*<\/uri>.*?<\/include>/m, "")
 
-#workspace
+#update with contents
 rels.update({
+  firmware_mix: contents[:firmware_init][/mixer load .*/].split.last,
+
   workspace_world: world_name + ".world",
   workspace_opts: world_name + ".xml"
 })
+
+abs[:firmware_mix] = check_expanded_path(rels[:firmware_mix], abs[:firmware], "invalid mixer in #{abs[:firmware_init]}")
 
 for sym in [:workspace_firmware, :workspace_world, :workspace_opts]
   abs[sym] = File.expand_path(rels[sym], abs[:workspace])
@@ -249,7 +252,7 @@ opts[:n].times do |i|
     mkdir_p model_name
 
     cd(model_name) {
-      rc_file = create_fcu_files(opts, m_num, abs[:firmware_mixers], contents[:firmware_init])
+      rc_file = create_fcu_files(opts, m_num, abs[:firmware_mix], rels[:firmware_mix], contents[:firmware_init])
 
       #run firmware
       xspawn("#{fw_name}-#{m_num}", "../#{fw_name} -d #{rc_file}", opts[:debug])
