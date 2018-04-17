@@ -24,6 +24,7 @@ opts = {
   n: 1,
   r: 10000,
   f: "ekf2",
+  o: {},
   gazebo_model: "iris",
   base_port: 15010,
   port_step: 10,
@@ -94,6 +95,13 @@ def check_expanded_path(file_name, dir = nil, msg = nil)
   p
 end
 
+def xml_elements(kv)
+  s = ""
+  kv.each { |k, v| s<<"<#{k}>#{v}</#{k}>" }
+
+  s
+end
+
 #options
 op = OptionParser.new do |op|
   op.banner = "Usage: #{__FILE__} [options] [world_file]"
@@ -102,6 +110,7 @@ op = OptionParser.new do |op|
   op.on("-r RATE", Integer, "px4 data rate") { |p| opts[:r] = p }
   op.on("-f FILTER", "px4 filter") { |p| opts[:f] = p }
   op.on("-i NAME", "px4 model init file") { |p| opts[:i] = p }
+  op.on("-o PARAM=VALUE", /(.+)=(.+)/, "gazebo model option") { |p, k, v| opts[:o][k] = v }
 
   op.on("--gazebo_model NAME", "gazebo model name") { |p| opts[:gazebo_model] = p }
   op.on("--imu_rate IMU_RATE", Integer, "imu rate") { |p| opts[:imu_rate] = p }
@@ -231,6 +240,7 @@ end
 
 model_incs = ""
 model_opts = ""
+model_opts += "  <model>" + xml_elements(opts[:o]) + "</model>\n" unless opts[:o].empty?
 opts[:n].times do |i|
   x=i*opts[:distance]
   m_index=i
@@ -263,7 +273,7 @@ opts[:n].times do |i|
   n = "<name>#{model_name}</name>"
 
   model_incs += "    <include>#{n}<uri>model://#{opts[:gazebo_model]}</uri><pose>#{x} 0 0 0 0 0</pose></include>\n" unless contents[:gazebo_world].include?(n)
-  model_opts += "  <model>#{n}<mavlink_udp_port>#{@sim_port}</mavlink_udp_port></model>\n"
+  model_opts += "  <model name=\"#{model_name}\">" + xml_elements(:mavlink_udp_port => @sim_port) + "</model>\n"
 
   cd("mavros") {
     sleep 1
