@@ -3,7 +3,7 @@
 dir=`pwd`/`dirname $0`/../
 
 cd $dir
-git submodule update --init --remote
+./git-subrepo.sh
 
 #px4
 

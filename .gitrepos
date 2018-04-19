@@ -1,0 +1,3 @@
+https://github.com/acsl-mipt/git-commands.git git-commands
+--depth 1 --branch 1.5 https://github.com/acsl-mipt/Firmware.git Firmware
+--depth 1 --branch 1.5 https://github.com/acsl-mipt/sitl_gazebo.git sitl_gazebo
