@@ -6,10 +6,14 @@ cd $dir
 ./git-subrepo.sh
 
 #px4
+label="default"
+if [ "$1" ]; then
+  label=$1
+fi
 
 cd $dir/Firmware
 make clean
-make posix_sitl_default
+make posix_sitl_$label
 
 #sitl_gazebo
 
