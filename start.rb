@@ -23,8 +23,7 @@ px4_fname="px4"
 @firmware_dir = @root_dir + firmware_dir + '/'
 
 #options
-all_model_names = ["iris", "iris_opt_flow"]
-opts = { model: "iris", num: 1, rate: 10000, filter: "ekf2" , workspace: "workspace", gazebo: "gazebo", catkin_ws: "workspace/catkin_ws", rosinstall: "deps.rosinstall"}
+opts = { model: "iris", num: 1, rate: 10000, filter: "ekf2" , workspace: "workspace", gazebo: "gazebo", catkin_ws: "workspace/catkin_ws", rosinstall: "deps.rosinstall", build_label: "default"}
 
 #sitl_gazebo
 world_fname = "default.world"
@@ -49,17 +48,17 @@ def create_fcu_files(opts,m_num)
     mkdir_p "rootfs/eeprom"
     touch "rootfs/eeprom/parameters"
 
-    cp @firmware_dir+"ROMFS/px4fmu_common/mixers/quad_w.main.mix", "./"
+    cp_r @firmware_dir+"ROMFS/px4fmu_common/mixers", "./"
 
     #generate rc file
     rc1 ||= File.read(rc_script)
     rc = rc1.sub('param set MAV_TYPE',"param set MAV_SYS_ID #{m_num}\nparam set MAV_TYPE")
-    rc.sub!('ROMFS/px4fmu_common/mixers/','')
+    rc.sub!('ROMFS/px4fmu_common/','')
     unless opts[:logging]
       rc.sub!(/sdlog2 start.*\n/,'')
       rc.sub!(/logger start.*\n/,'')
     end
-    rc.sub!(/.*OPTICAL_FLOW_RAD.*\n/,'') if opts[:model]=="iris"
+    rc.sub!(/.*OPTICAL_FLOW_RAD.*\n/,'') unless opts[:optical_flow]
 
     rc.sub!(/simulator start -s.*$/,"simulator start -s -u #{@sim_port}")
 
@@ -81,7 +80,7 @@ end
 op = OptionParser.new do |op|
   op.banner = "Usage: #{__FILE__} [options] [world_file]"
 
-  op.on("-m MODEL", all_model_names, all_model_names.join(", ")) do |m|
+  op.on("-m MODEL", "model name") do |m|
     opts[:model] = m
   end
 
@@ -154,6 +153,9 @@ op = OptionParser.new do |op|
     opts[:rosinstall] = p
   end
 
+  op.on("--optical_flow", "turn on optical flow") { opts[:optical_flow] = true }
+  op.on("--build_label NAME", "build label") { |p| opts[:build_label] = p }
+
   op.on("-h", "help") do
     puts op
     exit
@@ -197,7 +199,7 @@ sleep 1
 
 unless File.exist?(px4_dir + px4_fname)
   mkdir_p px4_dir
-  cp @firmware_dir + "build_posix_sitl_default/src/firmware/posix/" + px4_fname, px4_dir
+  cp @firmware_dir + "build_posix_sitl_#{opts[:build_label]}/src/firmware/posix/" + px4_fname, px4_dir
 end
 
 
