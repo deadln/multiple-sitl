@@ -9,8 +9,6 @@ rels = {
   firmware: "../../../Firmware",
   sitl_gazebo: "../sitl_gazebo",
 
-  firmware_bin: "build/posix_sitl_default/px4",
-
   workspace_firmware: "fw"
 }
 
@@ -29,6 +27,7 @@ opts = {
   base_port: 15010,
   port_step: 10,
   distance: 2,
+  build_label: "default",
 
   workspace: "workspace",
   gazebo: "gazebo",
@@ -128,6 +127,7 @@ op = OptionParser.new do |op|
   op.on("--optical_flow", "turn on optical flow") { opts[:optical_flow] = true }
   op.on("--firmware PATH", "path to firmware folder") { |p| opts[:firmware] = p }
   op.on("--sitl_gazebo PATH", "path to sitl_gazebo folder") { |p| opts[:sitl_gazebo] = p }
+  op.on("--build_label NAME", "build label") { |p| opts[:build_label] = p }
 
   op.on("--restart", "soft restart") do
     opts[:restart] = true
@@ -146,6 +146,7 @@ opts[:gazebo_world] = ARGV[0]
 
 #update rels
 rels.update({
+  firmware_bin: "build/posix_sitl_#{opts[:build_label]}/px4",
   firmware_init: "posix-configs/SITL/init/#{opts[:f]}/#{opts[:i] || opts[:gazebo_model]}",
   gazebo_world: "worlds/#{opts[:gazebo_model]}.world"
 })
