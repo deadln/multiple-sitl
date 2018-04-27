@@ -65,12 +65,12 @@ def create_fcu_files(opts, m_num, mix_file, rel_mix, init_str)
     end
     rc.sub!(/.*OPTICAL_FLOW_RAD.*\n/,'') unless opts[:optical_flow]
 
-    rc.sub!(/simulator start -s.*$/,"simulator start -s -u #{@sim_port}")
+    rc.sub!(/(simulator start.*)/, "\\1 -u #{@sim_port}")
 
-    rc.gsub!("-r 4000000","-r #{opts[:r]}")
+    rc.gsub!(/(mavlink start .*-r) \S+/,"\\1 #{opts[:r]}")
 
+    rc.sub!(/(mavlink start .*-u) 14556/, "\\1 #{@mav_port} -o #{@mav_oport}")
     rc.gsub!("-u 14556","-u #{@mav_port}")
-    rc.sub!("mavlink start -x -u #{@mav_port}","mavlink start -x -u #{@mav_port} -o #{@mav_oport}")
 
     rc.sub!("-u 14557","-u #{@mav_port2}")
     rc.sub!("-r 250 -s HIGHRES_IMU -u #{@mav_port}", "-r #{opts[:imu_rate]} -s HIGHRES_IMU -u #{@mav_port2}") if opts[:imu_rate]
