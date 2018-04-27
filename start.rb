@@ -128,6 +128,7 @@ op = OptionParser.new do |op|
   op.on("--firmware PATH", "path to firmware folder") { |p| opts[:firmware] = p }
   op.on("--sitl_gazebo PATH", "path to sitl_gazebo folder") { |p| opts[:sitl_gazebo] = p }
   op.on("--build_label NAME", "build label") { |p| opts[:build_label] = p }
+  op.on("--legacy", "legacy logic") { |p| opts[:legacy] = true }
 
   op.on("--restart", "soft restart") do
     opts[:restart] = true
@@ -144,9 +145,12 @@ end
 op.parse!
 opts[:gazebo_world] = ARGV[0]
 
+target = "posix_sitl_#{opts[:build_label]}"
+fw_dir = opts[:legacy] ? "build_#{target}/src/firmware/posix" : "build/#{target}"
+
 #update rels
 rels.update({
-  firmware_bin: "build/posix_sitl_#{opts[:build_label]}/px4",
+  firmware_bin: "#{fw_dir}/px4",
   firmware_init: "posix-configs/SITL/init/#{opts[:f]}/#{opts[:i] || opts[:gazebo_model]}",
   gazebo_world: "worlds/#{opts[:gazebo_model]}.world"
 })
