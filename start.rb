@@ -155,6 +155,7 @@ op = OptionParser.new do |op|
 
   op.on("--optical_flow", "turn on optical flow") { opts[:optical_flow] = true }
   op.on("--build_label NAME", "build label") { |p| opts[:build_label] = p }
+  op.on("--nomap", "ros topics without num suffix") { opts[:nomap] = true }
 
   op.on("-h", "help") do
     puts op
@@ -260,8 +261,9 @@ opts[:num].times do |i|
 
     pl="plugin_lists:=#{opts[:plugin_lists]}" if opts[:plugin_lists]
     launch_opts = opts[:hitl] ? "bridge_on:=true bridge_inport:=#{@bridge_port} fcu_url:=/dev/ttyACM0:921600 gcs_inport:=#{@sim_port}" : "fcu_url:=udp://127.0.0.1:#{@mav_oport2}@127.0.0.1:#{@mav_port2} gcs_inport:=#{@bridge_port}"
+    nomap = opts[:nomap] ? "true" : "false"
 
-    xspawn("mavros-#{m_num}", "./roslaunch.sh #{opts[:catkin_ws]} num:=#{m_num} #{pl} #{launch_opts}", opts[:debug])
+    xspawn("mavros-#{m_num}", "./roslaunch.sh #{opts[:catkin_ws]} num:=#{m_num} nomap:=#{nomap} #{pl} #{launch_opts}", opts[:debug])
 
   } unless opts[:restart] or opts[:nomavros]
 

@@ -3,26 +3,31 @@
   <arg name="plugin_lists" default="$(find mavros)/launch/px4_pluginlists.yaml" />
   <arg name="bridge_on" default="false" />
 
-  <!-- remap mavlink bridge topics -->
-  <remap from="/mavlink/to" to="/mavlink$(arg num)/to" />
-  <remap from="/mavlink/from" to="/mavlink$(arg num)/from" />
+  <arg name="mav_id" default="$(arg num)" />
+  <arg name="nomap" default="true" />
+  <arg name="snum" value="" if="$(arg nomap)" />
+  <arg name="snum" value="$(arg num)" unless="$(arg nomap)" />
 
-  <node pkg="mavros" type="mavros_node" name="mavros$(arg num)" required="true" clear_params="true" output="$(arg log_output)">
+  <!-- remap mavlink bridge topics -->
+  <remap unless="$(arg nomap)" from="/mavlink/to" to="/mavlink$(arg snum)/to" />
+  <remap unless="$(arg nomap)" from="/mavlink/from" to="/mavlink$(arg snum)/from" />
+
+  <node pkg="mavros" type="mavros_node" name="mavros$(arg snum)" required="true" clear_params="true" output="$(arg log_output)">
     <param name="fcu_url" value="$(arg fcu_url)" />
     <param name="gcs_url" value="udp://:$(arg gcs_inport)@" />
-    <param name="system_id" value="$(arg num)" />
-    <param name="target_system_id" value="$(arg num)" />
+    <param name="system_id" value="$(arg mav_id)" />
+    <param name="target_system_id" value="$(arg mav_id)" />
     <param name="target_component_id" value="1" />
 
-    <remap from="/tf" to="/tf_$(arg num)" />
-    <remap from="/tf_static" to="/tf_static_$(arg num)" />
+    <remap unless="$(arg nomap)" from="/tf" to="/tf$(arg snum)" />
+    <remap unless="$(arg nomap)" from="/tf_static" to="/tf_static$(arg snum)" />
 
     <!-- load blacklist, config -->
     <rosparam command="load" file="$(arg plugin_lists)" />
     <rosparam command="load" file="$(find mavros)/launch/px4_config.yaml" />
   </node>
 
-  <node if="$(arg bridge_on)" pkg="mavros" type="gcs_bridge" name="gcs_bridge$(arg num)">
+  <node if="$(arg bridge_on)" pkg="mavros" type="gcs_bridge" name="gcs_bridge$(arg snum)">
     <param name="gcs_url" value="udp://:$(arg bridge_inport)@" />
   </node>
 </launch>
