@@ -72,7 +72,26 @@ def create_fcu_files(opts,m_num)
     rc.sub!("-o 14540","-o #{@mav_oport2}")
     rc.sub!("gpssim start","param set MAV_USEHILGPS 1") if opts[:hil_gps]
 
-    File.open(@rc_file, 'w') { |out| out << rc }
+
+    File.open(@rc_file, 'w') { |out|
+      rc.each_line {|l|
+        if opts[:onboard_streams] and l =~ /mavlink start.*-m onboard.*\n/
+          l.sub!("onboard","magic")
+          out << l
+
+          s = File.read(opts[:onboard_streams])
+          s.each_line { |sl|
+            sl.strip!
+            unless sl.empty?
+              type, rate = sl.split
+              out << "mavlink stream -r #{rate} -s #{type} -u #{@mav_port2}\n"
+            end
+          }
+        else
+          out << l
+        end
+      }
+    }
   end
 end
 
@@ -156,6 +175,7 @@ op = OptionParser.new do |op|
   op.on("--optical_flow", "turn on optical flow") { opts[:optical_flow] = true }
   op.on("--build_label NAME", "build label") { |p| opts[:build_label] = p }
   op.on("--nomap", "ros topics without num suffix") { opts[:nomap] = true }
+  op.on("--onboard_streams PATH", "path to mavlink onboard streams file") {|p| opts[:onboard_streams] = p }
 
   op.on("-h", "help") do
     puts op
@@ -179,6 +199,7 @@ opts[:gazebo] = File.expand_path(opts[:gazebo], @current_dir)
 opts[:catkin_ws] = File.expand_path(opts[:catkin_ws], @current_dir)
 opts[:rosinstall] = File.expand_path(opts[:rosinstall], @current_dir)
 opts[:plugin_lists] = File.expand_path(opts[:plugin_lists], @current_dir) if opts[:plugin_lists]
+opts[:onboard_streams] = File.expand_path(opts[:onboard_streams], @current_dir) if opts[:onboard_streams]
 
 px4_dir = opts[:workspace] + px4_dir + "/"
 
