@@ -6,5 +6,5 @@ cd $dir
 sudo ./sudo_deps.sh
 sudo ./ros/sudo_deps.sh
 
-./prepare.sh
+./prepare.sh $@
 ./ros/prepare.sh
