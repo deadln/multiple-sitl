@@ -2,22 +2,27 @@
 
 dir=`pwd`/`dirname $0`/..
 
+label="default"
 fw_dir=$dir/../../
 sg_dir=$dir/../sitl_gazebo
 
 if [ "$1" ]; then
-  fw_dir=$1
+  label=$1
 fi
 
 if [ "$2" ]; then
-  sg_dir=$2
+  fw_dir=$2
+fi
+
+if [ "$3" ]; then
+  sg_dir=$3
 fi
 
 #px4
 
 cd $fw_dir
 make clean
-make posix_sitl_default
+make posix_sitl_$label
 
 #sitl_gazebo
 
