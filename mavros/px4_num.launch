@@ -1,7 +1,6 @@
 <launch>
   <arg name="log_output" default="screen" />
   <arg name="plugin_lists" default="$(find mavros)/launch/px4_pluginlists.yaml" />
-  <arg name="bridge_on" default="false" />
 
   <!-- remap mavlink bridge topics -->
   <remap from="/mavlink/to" to="/mavlink$(arg num)/to" />
@@ -14,15 +13,11 @@
     <param name="target_system_id" value="$(arg num)" />
     <param name="target_component_id" value="1" />
 
-    <remap from="/tf" to="/tf_$(arg num)" />
-    <remap from="/tf_static" to="/tf_static_$(arg num)" />
+    <remap from="/tf" to="/tf$(arg num)" />
+    <remap from="/tf_static" to="/tf_static$(arg num)" />
 
     <!-- load blacklist, config -->
     <rosparam command="load" file="$(arg plugin_lists)" />
     <rosparam command="load" file="$(find mavros)/launch/px4_config.yaml" />
-  </node>
-
-  <node if="$(arg bridge_on)" pkg="mavros" type="gcs_bridge" name="gcs_bridge$(arg num)">
-    <param name="gcs_url" value="udp://:$(arg bridge_inport)@" />
   </node>
 </launch>

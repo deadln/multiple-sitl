@@ -129,6 +129,7 @@ op = OptionParser.new do |op|
   op.on("--sitl_gazebo PATH", "path to sitl_gazebo folder") { |p| opts[:sitl_gazebo] = p }
   op.on("--build_label NAME", "build label") { |p| opts[:build_label] = p }
   op.on("--legacy", "legacy logic") { |p| opts[:legacy] = true }
+  op.on("--single", "single mavros node") { |p| opts[:single] = true }
 
   op.on("--restart", "soft restart") do
     opts[:restart] = true
@@ -284,9 +285,10 @@ opts[:n].times do |i|
     sleep 1
 
     pl="plugin_lists:=#{abs[:plugin_lists]}" if abs[:plugin_lists]
-    launch_opts = "fcu_url:=udp://127.0.0.1:#{@mav_oport2}@127.0.0.1:#{@mav_port2} gcs_inport:=#{@gcs_inport}"
+    launch_opts = "num:=#{m_num} fcu_url:=udp://127.0.0.1:#{@mav_oport2}@127.0.0.1:#{@mav_port2} gcs_inport:=#{@gcs_inport} #{pl}"
+    launch_suffix = opts[:single] ? "single" : "num"
 
-    xspawn("mavros-#{m_num}", "./roslaunch.sh #{abs[:catkin_ws]} num:=#{m_num} #{pl} #{launch_opts}", opts[:debug])
+    xspawn("mavros-#{m_num}", "./roslaunch.sh #{abs[:catkin_ws]} px4_#{launch_suffix}.launch #{launch_opts}", opts[:debug])
 
   } unless opts[:restart] or opts[:nomavros]
 
