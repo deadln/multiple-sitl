@@ -130,6 +130,7 @@ op = OptionParser.new do |op|
   op.on("--build_label NAME", "build label") { |p| opts[:build_label] = p }
   op.on("--legacy", "legacy logic") { |p| opts[:legacy] = true }
   op.on("--single", "single mavros node") { |p| opts[:single] = true }
+  op.on("--hitl", "HITL mode") { |p| opts[:hitl] = true }
 
   op.on("--restart", "soft restart") do
     opts[:restart] = true
@@ -273,13 +274,15 @@ opts[:n].times do |i|
       #run firmware
       xspawn("#{fw_name}-#{m_num}", "../#{fw_name} -d #{rc_file}", opts[:debug])
     }
-  }
+  } unless opts[:hitl]
 
   #generate model
   n = "<name>#{model_name}</name>"
 
   model_incs += "    <include>#{n}<uri>model://#{opts[:gazebo_model]}</uri><pose>#{x} 0 0 0 0 0</pose></include>\n" unless contents[:gazebo_world].include?(n)
-  model_opts += "  <model name=\"#{model_name}\">" + xml_elements(:mavlink_udp_port => @sim_port) + "</model>\n"
+
+  mavlink_udp_port = opts[:hitl] ? @mav_port2 : @sim_port
+  model_opts += "  <model name=\"#{model_name}\">" + xml_elements(:mavlink_udp_port => mavlink_udp_port) + "</model>\n"
 
   cd("mavros") {
     sleep 1
