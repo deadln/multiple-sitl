@@ -130,7 +130,11 @@ op = OptionParser.new do |op|
   op.on("--build_label NAME", "build label") { |p| opts[:build_label] = p }
   op.on("--legacy", "legacy logic") { |p| opts[:legacy] = true }
   op.on("--single", "single mavros node") { |p| opts[:single] = true }
-  op.on("--hitl", "HITL mode") { |p| opts[:hitl] = true }
+  op.on("--hitl", "HITL mode") { |p|
+    opts[:hitl] = true
+    opts[:o][:serialEnabled] = 1
+    opts[:o][:hil_mode] = 1
+  }
 
   op.on("--restart", "soft restart") do
     opts[:restart] = true
