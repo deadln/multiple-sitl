@@ -46,7 +46,7 @@ def xspawn(term_name, cmd, debug)
   Process.detach(pid)
 end
 
-def create_fcu_files(opts, m_num, mix_file, rel_mix, init_str)
+def create_fcu_files(opts, m_num, abs, rels, contents)
   rc_file="rcS#{m_num}"
 
   unless File.exist?(rc_file)
@@ -54,11 +54,11 @@ def create_fcu_files(opts, m_num, mix_file, rel_mix, init_str)
     mkdir_p "rootfs/eeprom"
     touch "rootfs/eeprom/parameters"
 
-    cp mix_file, "./"
+    cp abs[:firmware_mix], "./"
 
     #generate rc file
-    rc = init_str.sub('param set MAV_TYPE',"param set MAV_SYS_ID #{m_num}\nparam set MAV_TYPE")
-    rc.sub!(File.dirname(rel_mix) + '/','')
+    rc = contents[:firmware_init].sub('param set MAV_TYPE',"param set MAV_SYS_ID #{m_num}\nparam set MAV_TYPE")
+    rc.sub!(File.dirname(rels[:firmware_mix]) + '/','')
     unless opts[:logging]
       rc.sub!(/sdlog2 start.*\n/,'')
       rc.sub!(/logger start.*\n/,'')
@@ -77,7 +77,21 @@ def create_fcu_files(opts, m_num, mix_file, rel_mix, init_str)
     rc.sub!("-o 14540","-o #{@mav_oport2}")
     rc.sub!("gpssim start","param set MAV_USEHILGPS 1") if opts[:hil_gps]
 
-    File.open(rc_file, 'w') { |out| out << rc }
+    File.open(rc_file, 'w') { |out|
+      rc.each_line {|l|
+        if opts[:onboard_streams] and l =~ /mavlink start.*-m onboard.*\n/
+          l.sub!("onboard","magic")
+          out << l
+
+          contents[:onboard_streams].each_line { |sl|
+            type, rate = sl.split
+            out << "mavlink stream -r #{rate} -s #{type} -u #{@mav_port2}\n" if type and rate
+          }
+        else
+          out << l
+        end
+      }
+    }
   end
 
   rc_file
@@ -135,6 +149,7 @@ op = OptionParser.new do |op|
     opts[:o][:serialEnabled] = 1
     opts[:o][:hil_mode] = 1
   }
+  op.on("--onboard_streams PATH", "path to mavlink onboard streams file (type and rate whitespace separated on each line)") {|p| opts[:onboard_streams] = p }
 
   op.on("--restart", "soft restart") do
     opts[:restart] = true
@@ -171,7 +186,7 @@ for sym in [:workspace, :gazebo, :catkin_ws]
 end
 
 #check
-for sym in [:firmware, :sitl_gazebo, :plugin_lists, :gazebo_world]
+for sym in [:firmware, :sitl_gazebo, :plugin_lists, :gazebo_world, :onboard_streams]
   abs[sym] = check_expanded_path(opts[sym]) if opts[sym]
 end
 
@@ -205,8 +220,8 @@ end
 
 #contents
 contents = {}
-for sym in [:firmware_init, :gazebo_world]
-  contents[sym] = File.read(abs[sym])
+for sym in [:firmware_init, :gazebo_world, :onboard_streams]
+  contents[sym] = File.read(abs[sym]) if abs[sym]
 end
 world_name = contents[:gazebo_world][/<world name="(.*)">/, 1]
 contents[:gazebo_world].sub!(/\n[^<]*<include>[^<]*<uri>model:\/\/iris[^<]*<\/uri>.*?<\/include>/m, "")
@@ -273,7 +288,7 @@ opts[:n].times do |i|
     mkdir_p model_name
 
     cd(model_name) {
-      rc_file = create_fcu_files(opts, m_num, abs[:firmware_mix], rels[:firmware_mix], contents[:firmware_init])
+      rc_file = create_fcu_files(opts, m_num, abs, rels, contents)
 
       #run firmware
       xspawn("#{fw_name}-#{m_num}", "../#{fw_name} -d #{rc_file}", opts[:debug])
