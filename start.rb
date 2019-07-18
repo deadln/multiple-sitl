@@ -278,7 +278,7 @@ opts[:n].times do |i|
       rc_file = create_fcu_files(opts, m_num, abs, rels, contents)
 
       #run firmware
-      xspawn("#{fw_name}-#{m_num}", "#{abs[:firmware_bin]} -d -i #{m_index} -s #{rc_file} #{abs[:firmware_etc]}", opts[:debug])
+      xspawn("#{fw_name}-#{m_num}", "#{abs[:firmware_bin]} #{opts[:debug] ? '' : '-d'} -i #{m_index} -s #{rc_file} #{abs[:firmware_etc]}", opts[:debug])
     }
   } unless opts[:hitl]
 
