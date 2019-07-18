@@ -22,7 +22,7 @@ fi
 
 cd $fw_dir
 make clean
-make posix_sitl_$label
+make px4_sitl_$label
 
 #sitl_gazebo
 
