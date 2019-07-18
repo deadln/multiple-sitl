@@ -1,6 +1,6 @@
 #ROS
 
-ros_release="kinetic"
+ros_release="melodic"
 
 rosdep update
 

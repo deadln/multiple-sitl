@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ros_release="kinetic"
+ros_release="melodic"
 
 source /opt/ros/${ros_release}/setup.bash
 
