@@ -1,15 +1,24 @@
-Project to run multiple px4 SITL with Gazebo on Ubuntu 16.04 (Xenial).
+Project to run multiple px4 SITL with Gazebo 9 on Ubuntu 18.04 (Bionic) and Debian 9 (Stretch).
 
 Install
 =======
 
-Download firmware sources:
-git clone https://github.com/PX4/Firmware.git
-cd Firmware/Tools
+Download firmware sources with tag vX.Y.Z:
+git clone --branch vX.Y.Z https://github.com/PX4/Firmware.git
 
-Download multiple-sitl:
-git clone --branch for-px4-pr https://github.com/acsl-mipt/multiple-sitl.git
+Update sitl_gazebo:
+cd Firmware
+git submodule update --init Tools/sitl_gazebo
+
+Download multiple-sitl branch X.Y:
+cd Tools
+git clone --branch X.Y https://github.com/acsl-mipt/multiple-sitl.git
 cd multiple-sitl/install
+
+Install all in one:
+./all.sh
+
+or
 
 If you want to install system packages needed for simulation:
 sudo ./sudo_deps.sh
@@ -36,7 +45,6 @@ Run
 To see all options and default values:
 ./start.rb -h
 
-
 To start 3 instances of Iris with xterm windows to see outputs (ROS/Mavros by default)
 ./start.rb -n 3 --debug
 
@@ -60,15 +68,15 @@ Basic idea:
     rcS startup script
     additional files
  
-- generate each rcS from file written for appropriate model (for example posix-configs/SITL/init/ekf2/iris)
+- generate each rcS from file written for appropriate model
     change parameters and module startup options according to number of model (to eliminate conflicts with others)
     also change content according to start.rb command line arguments
 - run each firmware instance in self home
 
 - run ROS/Mavros for each firmware instance if needed
 
-- generate Gazebo world with all model instances based on model's world (for example Tools/sitl_gazebo/worlds/iris.world)
-- generate sitl_gazebo xml file with options(mavlink_udp_port) for each model instance
+- generate Gazebo world with all model instances based on model's world (for example sitl_gazebo/worlds/iris.world)
+- generate sitl_gazebo xml file with options(mavlink_tcp_port or mavlink_udp_port) for each model instance
 - startup Gazebo (starts sitl_gazebo plugins)
 
 
@@ -76,20 +84,20 @@ Command line arguments:
 ./start.rb [options] [world_file]
 
 world_file - force using this origin world file 
--f - use origin rcS dir according to chosen filter (posix-configs/SITL/init/ekf2/ is for ekf2)
--i - use origin rcS according to name, should be used if --gazebo_model did not match (posix-configs/SITL/init/ekf2/iris is for iris)
+-f - choose filter
+-i - px4 model, should be used if --gazebo_model did not match
 -o - set option common to all models in sitl_gazebo xml file
---gazebo_model - use model and named world from known resources paths (Tools/sitl_gazebo/models/iris/iris.sdf and Tools/sitl_gazebo/worlds/iris.world are for iris)
+--gazebo_model - use model and named world from known resources paths (sitl_gazebo/models/iris/iris.sdf and sitl_gazebo/worlds/iris.world for iris)
 
 --debug - open xterm output windows for all processes
 --restart - restart firmware and reset models in Gazebo world
 
---distance - between nearest model instances in Gazebo
---base_port - start count UDP ports for models from this value
---port_step - UDP port step for sequential model
+--distance - between nearest model instances in Gazebo, 
+--base_port - start count ports for models from this value
+--port_step - port step for sequential model
+--udp_sitl - udp exchange between px4 and sitl_gazebo
 
---build_label - for firmware make target (posix_sitl_default is for default)
---legacy - logic for Firmware version < 1.6
+--build_label - for firmware make target (px4_sitl_default is for default)
 
  Paths:
  --workspace - change workspace dir
@@ -99,7 +107,6 @@ world_file - force using this origin world file
 
  rcS startup script content:
  -r - change rate for mavlink module
- --imu_rate - change rate for imu mavlink stream
  --hil_gps - disable gpssim module, set MAV_USEHILGPS parameter
  --logging - disable logger modules
  --optical_flow - leave OPTICAL_FLOW_RAD mavlink stream
