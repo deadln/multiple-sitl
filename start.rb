@@ -293,13 +293,14 @@ opts[:n].times do |i|
   model_opts += "  <model name=\"#{model_name}\">" + xml_elements(mo) + "</model>\n"
 
   cd("mavros") {
-    sleep 1
-
     pl="plugin_lists:=#{abs[:plugin_lists]}" if abs[:plugin_lists]
     launch_opts = "num:=#{m_num} fcu_url:=udp://127.0.0.1:#{@mav_oport2}@127.0.0.1:#{@mav_port2} gcs_inport:=#{@gcs_inport} #{pl}"
     launch_suffix = opts[:single] ? "single" : "num"
 
     xspawn("mavros-#{m_num}", "./roslaunch.sh #{abs[:catkin_ws]} px4_#{launch_suffix}.launch #{launch_opts}", opts[:debug])
+    if i == 0
+      sleep 2
+    end
 
   } unless opts[:restart] or opts[:nomavros]
 
