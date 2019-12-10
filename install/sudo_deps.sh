@@ -9,10 +9,10 @@ apt-get update
 apt-get install gazebo9 libgazebo9-dev -y
 
 #sitl_gazebo
-apt-get install libopencv-dev libeigen3-dev protobuf-compiler libprotobuf-dev libprotoc-dev -y
+apt-get install libopencv-dev libeigen3-dev protobuf-compiler libprotobuf-dev libprotoc-dev libgstreamer1.0-dev -y
 
 #px4
-apt-get install python-argparse git-core wget zip python-empy cmake build-essential genromfs -y
+apt-get install python-argparse git-core wget zip python-empy cmake build-essential genromfs python-jinja2 python-toml python-numpy python-yaml -y
 
 #start script
 apt-get install ruby xterm -y
