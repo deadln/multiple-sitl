@@ -62,7 +62,7 @@ def create_fcu_files(opts, m_num, abs, rels, contents)
     end
     rc.sub!(/.*OPTICAL_FLOW_RAD.*\n/,'') unless opts[:optical_flow]
 
-    rc.sub!(/(simulator start -s).*/, "\\1 -#{opts[:udp_sitl] ? 'u' : 'c' } #{@sim_port}")
+    rc.sub!(/(simulator start).*/, "\\1 -#{opts[:udp_sitl] ? 'u' : 'c' } #{@sim_port}")
 
     rc.gsub!(/(mavlink start .*-r) \S+/,"\\1 #{opts[:r]}")
 
