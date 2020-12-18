@@ -1,10 +1,10 @@
-Project to run multiple px4 SITL with Gazebo 9 on Ubuntu 18.04 (Bionic) and Debian 9 (Stretch).
+Project to run multiple px4 SITL with Gazebo on Ubuntu/Debian.
 
 Install
 =======
 
 Download firmware sources with tag vX.Y.Z:
-git clone --branch vX.Y.Z https://github.com/PX4/Firmware.git
+git clone --branch vX.Y.Z https://github.com/PX4/PX4-Autopilot.git
 
 Update sitl_gazebo:
 cd Firmware

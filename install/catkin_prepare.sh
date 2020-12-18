@@ -1,6 +1,8 @@
 #!/bin/bash
 
-ros_release="melodic"
+dir=`pwd`/`dirname $0`
+
+source $dir/params.sh
 
 source /opt/ros/${ros_release}/setup.bash
 

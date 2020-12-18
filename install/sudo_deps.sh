@@ -1,21 +1,28 @@
+#!/bin/bash
+
+source params.sh
+
 #repos
 
 echo "deb http://packages.osrfoundation.org/gazebo/ubuntu-stable `lsb_release -cs` main" > /etc/apt/sources.list.d/gazebo-stable.list
 wget http://packages.osrfoundation.org/gazebo.key -O - | apt-key add -
 
-apt-get update
+apt update
 
 #gazebo
-apt-get install gazebo9 libgazebo9-dev -y
+apt install gazebo${gz_ver} libgazebo${gz_ver}-dev -y
 
 #sitl_gazebo
-apt-get install libopencv-dev libeigen3-dev protobuf-compiler libprotobuf-dev libprotoc-dev libgstreamer1.0-dev -y
+apt install libopencv-dev libeigen3-dev protobuf-compiler libprotobuf-dev libprotoc-dev libgstreamer1.0-dev -y
 
 #px4
-apt-get install python-argparse git-core wget zip python-empy cmake build-essential genromfs python-jinja2 python-toml python-numpy python-yaml -y
+apt install git wget zip cmake build-essential genromfs -y
+# python-argparse
+# python-jinja2 python-numpy python-yaml -y
+#python-toml
 
 #start script
-apt-get install ruby xterm -y
+apt install ruby xterm -y
 
 #clean
-apt-get clean
+apt clean

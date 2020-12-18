@@ -6,7 +6,7 @@ require 'fileutils'
 include FileUtils
 
 rels = {
-  firmware: "../../../Firmware",
+  firmware: "../../",
   sitl_gazebo: "../sitl_gazebo",
 
   firmware_etc: "ROMFS/px4fmu_common",
@@ -167,10 +167,10 @@ opts[:gazebo_world] = ARGV[0]
 #update rels
 rels.update({
   firmware_bin: "build/px4_sitl_#{opts[:build_label]}/bin/px4",
-  gazebo_world: "worlds/#{opts[:gazebo_model]}.world"
+  gazebo_world: "worlds/empty.world"
 })
 msgs = {
-  gazebo_world: "invalid --gazebo_model option"
+  gazebo_world: "invalid gazebo_world"
 }
 
 #do not check
