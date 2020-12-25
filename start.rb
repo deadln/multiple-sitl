@@ -16,7 +16,7 @@ def create_fcu_files()
     cp @abs[sym], '.'
   end
 
-  File.open(@rels[:firmware_vars], 'a') do |out|   
+  File.open(@rels[:firmware_vars], 'a') do |out|
     out.puts "PX4_SIM_MODEL=#{@opts[:firmware_model] || @opts[:gazebo_model]}"
     out.puts "PX4_ESTIMATOR=#{@opts[:firmware_estimator]}"
 
@@ -33,7 +33,7 @@ def create_fcu_files()
   end
 
   File.open(@rels[:firmware_params], 'a') do |out|
-    out.puts "param set SDLOG_MODE -1" unless @opts[:logging]   
+    out.puts "param set SDLOG_MODE -1" unless @opts[:logging]
     #TODO
     out.puts "param set MAV_USEHILGPS 1" if @opts[:hil_gps]
   end
@@ -57,7 +57,7 @@ def expand_firmware_files()
   for sym in [:firmware_rc, :firmware_vars, :firmware_params, :firmware_mavlink]
     #default
     @abs[sym] = check_expanded_path(@rels[sym], def_firmware_initd)
-    
+
     #set by user
     if @abs[:firmware_initd]
       p = File.expand_path(@rels[sym], @abs[:firmware_initd])
@@ -143,13 +143,13 @@ def iterate_instances
   @opts[:n].times { |m_index|
     m_num = m_index+1
     model_name="#{@opts[:gazebo_model]}#{m_num}"
-    
+
     p = @opts[:ports_base] + m_index*@opts[:ports_step]
-    
+
     for n in @port_names
       ports[n] = p + @opts["pd_#{n}".to_sym]
     end
-    
+
     yield m_index, m_num, model_name, ports
   }
 end
@@ -177,7 +177,7 @@ def start_gazebo()
     system("gz world -o")
     return
   end
-  
+
   #paths
   d = File.dirname(@abs[:workspace_model])
   mkdir_p d
@@ -188,8 +188,8 @@ def start_gazebo()
   model_incs = ""
   model_opts = ""
   port_param = @opts[:udp_sitl] ? 'mavlink_udp_port' : 'mavlink_tcp_port'
-  
-  iterate_instances { |m_index, m_num, model_name, ports|   
+
+  iterate_instances { |m_index, m_num, model_name, ports|
     #generate sdf parts
     n = "<name>#{model_name}</name>"
     x = m_index*@opts[:distance]
@@ -235,10 +235,10 @@ def start_mavros()
         gcs_inport: ports[:gcs_mavros]
       }
       args[:plugin_lists] = @abs[:plugin_lists] if @abs[:plugin_lists]
-      
+
       launch = "px4_#{@opts[:single] ? 'single' : 'num'}.launch"
-      args.each { |k, v| launch<<" #{k}:=#{v}" }   
-      
+      args.each { |k, v| launch<<" #{k}:=#{v}" }
+
       xspawn("mavros-#{m_num}", "./roslaunch.sh #{@abs[:catkin_ws]} #{launch}", @opts[:debug])
       if m_num == 1
         sleep 3
@@ -266,7 +266,7 @@ end
   pd_payl_out: 7,
   pd_sim: 9,
   pd_gcs_mavros: 2000,
-  
+
   distance: 2,
   build_label: "default",
 
@@ -288,16 +288,16 @@ OptionParser.new do |op|
   op.on("--firmware_model NAME")
   op.on("--gazebo_model NAME")
   #TODO
-  op.on("--imu_rate IMU_RATE", Integer)  
+  op.on("--imu_rate IMU_RATE", Integer)
   #TODO
   op.on("--hil_gps", "turn on hil_gps mode")
-  
+
   op.on("--plugin_lists PATH", "path to mavros pluginlists.yaml")
   op.on("--logging", "turn on logging")
   op.on("--debug", "debug mode")
   op.on("--nomavros", "without mavros")
-  
-  
+
+
   op.on("--firmware_initd PATH", "path to dir with user defined firmware files ")
   op.on("--workspace PATH", "path to workspace")
   op.on("--gazebo PATH", "path to gazebo resources")
@@ -311,7 +311,7 @@ OptionParser.new do |op|
       @port_names<<k.to_s.delete_prefix('pd_').to_sym
     end
   end
-  
+
   op.on("--udp_sitl", "SITL with udp exchange")
   op.on("--distance DISTANCE", Integer, "distance between models")
   op.on("--firmware PATH", "path to firmware folder")
@@ -333,7 +333,7 @@ end.parse!(into: @opts)
 
 if @opts[:hitl]
     @opts[:go][:serialEnabled] = 1
-    @opts[:go][:hil_mode] = 1  
+    @opts[:go][:hil_mode] = 1
 end
 
 #relative paths
