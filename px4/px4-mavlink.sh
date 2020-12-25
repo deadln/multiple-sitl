@@ -15,7 +15,6 @@ mavlink stream -r 50 -s ATTITUDE_QUATERNION -u $udp_gcs_port_local
 mavlink stream -r 50 -s ATTITUDE_TARGET -u $udp_gcs_port_local
 mavlink stream -r 50 -s SERVO_OUTPUT_RAW_0 -u $udp_gcs_port_local
 mavlink stream -r 20 -s RC_CHANNELS -u $udp_gcs_port_local
-mavlink stream -r 10 -s OPTICAL_FLOW_RAD -u $udp_gcs_port_local
 
 # API/Offboard link
 mavlink start -x -u $udp_offboard_port_local -r 10000 -m onboard -o $udp_offboard_port_remote

@@ -12,15 +12,13 @@ def xspawn(term_name, cmd, debug, env = {})
 end
 
 def create_fcu_files()
-  paths={}
-  for sym in [:home_firmware_vars, :home_firmware_params, :home_firmware_mavlink]
-    cp @abs[sym], @abs[:workspace_firmware]
-    paths[sym] = @abs[:workspace_firmware] + '/' + @rels[sym].split('/').last
+  for sym in [:firmware_rc, :firmware_vars, :firmware_params, :firmware_mavlink]
+    cp @abs[sym], '.'
   end
 
-  File.open(paths[:home_firmware_vars], 'a') do |out|   
-    out.puts "PX4_SIM_MODEL=#{@opts[:i] || @opts[:gazebo_model]}"
-    out.puts "PX4_ESTIMATOR=#{@opts[:f]}"
+  File.open(@rels[:firmware_vars], 'a') do |out|   
+    out.puts "PX4_SIM_MODEL=#{@opts[:firmware_model] || @opts[:gazebo_model]}"
+    out.puts "PX4_ESTIMATOR=#{@opts[:firmware_estimator]}"
 
     out.puts "base_port=$((#{@opts[:ports_base]}+inst*#{@opts[:ports_step]}))"
     out.puts "simulator_opts=\"-#{@opts[:udp_sitl] ? 'u' : 'c'} $((base_port+#{@opts[:pd_sim]}))\""
@@ -34,7 +32,7 @@ def create_fcu_files()
     out.puts "udp_onboard_payload_port_remote=$((base_port+#{@opts[:pd_payl_out]}))"
   end
 
-  File.open(paths[:home_firmware_params], 'a') do |out|
+  File.open(@rels[:firmware_params], 'a') do |out|
     out.puts "param set SDLOG_MODE -1" unless @opts[:logging]   
     #TODO
     out.puts "param set MAV_USEHILGPS 1" if @opts[:hil_gps]
@@ -51,6 +49,21 @@ def check_expanded_path(file_name, dir = nil, msg = nil)
   end
 
   p
+end
+
+def expand_firmware_files()
+  def_firmware_initd = File.expand_path(@rels[:firmware_initd], @abs[:firmware_etc])
+
+  for sym in [:firmware_rc, :firmware_vars, :firmware_params, :firmware_mavlink]
+    #default
+    @abs[sym] = check_expanded_path(@rels[sym], def_firmware_initd)
+    
+    #set by user
+    if @abs[:firmware_initd]
+      p = File.expand_path(@rels[sym], @abs[:firmware_initd])
+      @abs[sym] = p if File.exist?(p)
+    end
+  end
 end
 
 def xml_elements(kv)
@@ -86,7 +99,7 @@ def expand_and_check()
   end
 
   #check
-  for sym in [:firmware, :sitl_gazebo, :plugin_lists, :gazebo_world]
+  for sym in [:firmware, :sitl_gazebo, :plugin_lists, :gazebo_world, :firmware_initd]
     @abs[sym] = check_expanded_path(@opts[sym]) if @opts[sym]
   end
 
@@ -99,14 +112,9 @@ def expand_and_check()
   for sym in [:firmware_bin, :firmware_etc]
     @abs[sym] = check_expanded_path(@rels[sym], @abs[:firmware])
   end
-  for sym in [:firmware_etc_rc]
-    @abs[sym] = check_expanded_path(@rels[sym], @abs[:firmware_etc])
-  end
-  
-  #check home resources
-  for sym in [:home_firmware_vars, :home_firmware_params, :home_firmware_mavlink]
-    @abs[sym] = check_expanded_path(@rels[sym], @abs[:home])
-  end
+
+  #check firmware files
+  expand_firmware_files()
 
   #gazebo resources
   for sym in [:gazebo_world, :gazebo_model]
@@ -121,7 +129,7 @@ def expand_and_check()
 
 end
 
-def init_contents()
+def load_contents()
   #contents
   @contents = {}
   for sym in [:gazebo_world, :gazebo_model]
@@ -148,20 +156,17 @@ end
 
 def start_firmware()
   fw_name = @rels[:firmware_bin].split('/').last
+
   mkdir_p @abs[:workspace_firmware]
-
-  rc_file='etc/' + @rels[:firmware_etc_rc]
-
   cd(@abs[:workspace_firmware]) {
     create_fcu_files()
 
     iterate_instances { |m_index, m_num, model_name, ports|
       #firmware instance
       mkdir_p model_name
-
       cd(model_name) {
         #run
-        xspawn("#{fw_name}-#{m_num}", "#{@abs[:firmware_bin]} #{@opts[:debug] ? '' : '-d'} -i #{m_index} -s #{rc_file} #{@abs[:firmware_etc]}", @opts[:debug], {'PATH'=> ENV['PATH'] + ':../'})
+        xspawn("#{fw_name}-#{m_num}", "#{@abs[:firmware_bin]} #{@opts[:debug] ? '' : '-d'} -i #{m_index} -s ../#{@rels[:firmware_rc]} #{@abs[:firmware_etc]}", @opts[:debug], {'PATH'=> ENV['PATH'] + ':../'})
       }
     }
   }
@@ -222,14 +227,19 @@ def start_gazebo()
 end
 
 def start_mavros()
-  iterate_instances { |m_index, m_num, model_name, ports|
-    #mavros instance
-    cd("mavros") {
-      pl="plugin_lists:=#{@abs[:plugin_lists]}" if @abs[:plugin_lists]
-      launch_opts = "num:=#{m_num} fcu_url:=udp://127.0.0.1:#{ports[:offb_out]}@127.0.0.1:#{ports[:offb]} gcs_inport:=#{ports[:gcs_mavros]} #{pl}"
-      launch_suffix = @opts[:single] ? "single" : "num"
-
-      xspawn("mavros-#{m_num}", "./roslaunch.sh #{@abs[:catkin_ws]} px4_#{launch_suffix}.launch #{launch_opts}", @opts[:debug])
+  cd("mavros") {
+    iterate_instances { |m_index, m_num, model_name, ports|
+      args={
+        num: m_num,
+        fcu_url: "udp://127.0.0.1:#{ports[:offb_out]}@127.0.0.1:#{ports[:offb]}",
+        gcs_inport: ports[:gcs_mavros]
+      }
+      args[:plugin_lists] = @abs[:plugin_lists] if @abs[:plugin_lists]
+      
+      launch = "px4_#{@opts[:single] ? 'single' : 'num'}.launch"
+      args.each { |k, v| launch<<" #{k}:=#{v}" }   
+      
+      xspawn("mavros-#{m_num}", "./roslaunch.sh #{@abs[:catkin_ws]} #{launch}", @opts[:debug])
       if m_num == 1
         sleep 3
       end
@@ -242,9 +252,9 @@ end
 #default options
 @opts = {
   n: 1,
-  f: "ekf2",
-  go: {},
+  firmware_estimator: "ekf2",
   gazebo_model: "iris",
+  go: {},
 
   ports_base: 15010,
   ports_step: 10,
@@ -272,10 +282,10 @@ OptionParser.new do |op|
   op.banner = "Usage: #{__FILE__} [options] [world_file]"
 
   op.on("-n NUM", Integer, "number of instances")
-  op.on("-f FILTER", "px4 filter")
-  op.on("-i NAME", "px4 model init file")
   op.on("-g PARAM=VALUE", /(.+)=(.+)/, "gazebo model option") { |p, k, v| @opts[:go][k] = v }
 
+  op.on("--firmware_estimator NAME")
+  op.on("--firmware_model NAME")
   op.on("--gazebo_model NAME")
   #TODO
   op.on("--imu_rate IMU_RATE", Integer)  
@@ -286,6 +296,9 @@ OptionParser.new do |op|
   op.on("--logging", "turn on logging")
   op.on("--debug", "debug mode")
   op.on("--nomavros", "without mavros")
+  
+  
+  op.on("--firmware_initd PATH", "path to dir with user defined firmware files ")
   op.on("--workspace PATH", "path to workspace")
   op.on("--gazebo PATH", "path to gazebo resources")
   op.on("--catkin_ws PATH", "path to catkin workspace")
@@ -325,19 +338,19 @@ end
 
 #relative paths
 @rels = {
-  firmware: "../../",
-  sitl_gazebo: "../sitl_gazebo",
+  sitl_gazebo: "../sitl_gazebo.m",
 
-  firmware_etc: "ROMFS/px4fmu_common",
-  firmware_etc_rc: "init.d-posix/rcS",
-  firmware_bin: "build/px4_sitl_#{@opts[:build_label]}/bin/px4",
+  firmware: "../../",
+    firmware_bin: "build/px4_sitl_#{@opts[:build_label]}/bin/px4",
+    firmware_etc: "ROMFS/px4fmu_common",
+      firmware_initd: "init.d-posix",
+        firmware_rc: "rcS",
+        firmware_vars: "px4-vars.sh",
+        firmware_params: "px4-params.sh",
+        firmware_mavlink: "px4-mavlink.sh",
 
   gazebo_world: "worlds/empty.world",
   gazebo_model: "models/#{@opts[:gazebo_model]}/#{@opts[:gazebo_model]}.sdf",
-
-  home_firmware_vars: "px4/px4-vars.sh",
-  home_firmware_params: "px4/px4-params.sh",
-  home_firmware_mavlink: "px4/px4-mavlink.sh",
 
   workspace_world: "ws.world",
   workspace_firmware: "fw"
@@ -357,7 +370,7 @@ if @opts[:help]
   exit
 end
 
-init_contents()
+load_contents()
 
 #init
 cd @abs[:home]
