@@ -5,7 +5,7 @@ require 'fileutils'
 
 include FileUtils
 
-def xspawn(term_name, cmd, debug, env = {})
+def xspawn(term_name, cmd, debug = false, env = {})
   term = debug ? "xterm -T #{term_name} -hold -e" : ""
   pid = spawn(env, "#{term} #{cmd}", [:out, :err]=>"/dev/null")
   Process.detach(pid)
@@ -99,7 +99,7 @@ def expand_and_check()
   end
 
   #check
-  for sym in [:firmware, :sitl_gazebo, :plugin_lists, :gazebo_world, :firmware_initd]
+  for sym in [:firmware, :sitl_gazebo, :plugin_lists, :world_sdf, :firmware_initd]
     @abs[sym] = check_expanded_path(@opts[sym]) if @opts[sym]
   end
 
@@ -117,22 +117,21 @@ def expand_and_check()
   expand_firmware_files()
 
   #gazebo resources
-  for sym in [:gazebo_world, :gazebo_model]
+  for sym in [:world_sdf, :model_sdf]
     check_gazebo_resource(sym)
   end
 
   #workspace
-  for sym in [:workspace_firmware, :workspace_world]
+  for sym in [:workspace_firmware, :workspace_model_sdf]
     @abs[sym] = File.expand_path(@rels[sym], @abs[:workspace])
   end
-  @abs[:workspace_model] = File.expand_path(@rels[:gazebo_model], @abs[:workspace])
 
 end
 
 def load_contents()
   #contents
   @contents = {}
-  for sym in [:gazebo_world, :gazebo_model]
+  for sym in [:world_sdf, :model_sdf]
     @contents[sym] = File.read(@abs[sym]) if @abs[sym]
   end
 end
@@ -172,6 +171,46 @@ def start_firmware()
   }
 end
 
+def generate_model(tags_values, split = false)
+  out = ""
+  if split
+    split_arr = []
+  end
+  
+  @contents[:model_sdf].each_line {|l|
+    found = false
+    tags_values.each { |k, v|
+      if l =~ /.*<#{k}>.*\n/
+        if split
+          split_arr << out
+          out = ""
+        end
+        
+        s = "      <#{k}>#{v}</#{k}>\n"
+        if split
+          split_arr << s
+        else
+          out << s
+        end
+
+        found = true
+        break
+      end
+    }
+    
+    unless found
+      out << l
+    end
+  }
+  
+  if split
+    split_arr << out
+    return split_arr
+  end
+  
+  out
+end
+
 def start_gazebo()
   if @opts[:restart]
     system("gz world -o")
@@ -179,51 +218,31 @@ def start_gazebo()
   end
 
   #paths
-  d = File.dirname(@abs[:workspace_model])
-  mkdir_p d
-  rm_r d, force: true
-  cp_r File.dirname(@abs[:gazebo_model]), d
+  mkdir_p @abs[:workspace]
 
-  #prepare
-  model_incs = ""
-  model_opts = ""
+  @contents[:model_sdf] = generate_model(@opts[:go]) unless @opts[:go].empty?
   port_param = @opts[:udp_sitl] ? 'mavlink_udp_port' : 'mavlink_tcp_port'
+  
+  parts = generate_model({port_param => ''}, true) #three parts: part before, tag line and part after
+  
+  xspawn("gazebo", @abs[:home] + "/gazebo.sh #{@abs[:world_sdf]} #{@abs[:gazebo]} #{@abs[:sitl_gazebo]}", @opts[:debug])
+  sleep 2
 
   iterate_instances { |m_index, m_num, model_name, ports|
-    #generate sdf parts
-    n = "<name>#{model_name}</name>"
     x = m_index*@opts[:distance]
-    model_incs += "    <include>#{n}<uri>model://#{@opts[:gazebo_model]}</uri><pose>#{x} 0 0 0 0 0</pose></include>\n" unless @contents[:gazebo_world].include?(n)
-    model_opts += "      <#{port_param} model=\"#{model_name}\">#{@opts[:hitl] ? ports[:offb] : ports[:sim]}</#{port_param}>\n"
-  }
-
-  #generate model
-  File.open(@abs[:workspace_model], 'w') do |out|
-    @contents[:gazebo_model].each_line {|l|
-      if l =~ /.*<#{port_param}>.*\n/
-        out << model_opts
-      else
-        out << l
+    
+    File.open(@abs[:workspace_model_sdf], 'w') do |out|
+      parts.each_with_index do |p, i|
+        if i == 1 #tag line with port_param
+          p = "      <#{port_param}>#{@opts[:hitl] ? ports[:offb] : ports[:sim]}</#{port_param}>\n"
+        end
+        out << p
       end
-    }
-  end
+    end
 
-  #generate world
-  File.open(@abs[:workspace_world], 'w') do |out|
-    @contents[:gazebo_world].sub!(/\n[^<]*<include>[^<]*<uri>model:\/\/#{@opts[:gazebo_model]}[^<]*<\/uri>.*?<\/include>/m, "")
-    @contents[:gazebo_world].each_line {|l|
-      out << l
-      if l =~ /.*<world.*\n/
-        out << model_incs
-      end
-    }
-  end
-
-  #start gazebo
-  cd(@abs[:workspace]) {
-    xspawn("gazebo", @abs[:home] + "/gazebo.sh #{@rels[:workspace_world]} #{@abs[:workspace]} #{@abs[:gazebo]} #{@abs[:sitl_gazebo]}", @opts[:debug])
+    env = {'GAZEBO_MASTER_URI' => '127.0.0.1:11345', 'GAZEBO_IP' => '127.0.0.1'}
+    system(env, "gz model #{@opts[:debug] ? '--verbose ' : ''}-m #{model_name} -f #{@abs[:workspace_model_sdf]} -x #{x}")
   }
-
 end
 
 def start_mavros()
@@ -329,7 +348,7 @@ OptionParser.new do |op|
     @opts[:help] = true
   end
 end.parse!(into: @opts)
-@opts[:gazebo_world] = ARGV[0]
+@opts[:world_sdf] = ARGV[0]
 
 if @opts[:hitl]
     @opts[:go][:serialEnabled] = 1
@@ -349,10 +368,10 @@ end
         firmware_params: "px4-params.sh",
         firmware_mavlink: "px4-mavlink.sh",
 
-  gazebo_world: "worlds/empty.world",
-  gazebo_model: "models/#{@opts[:gazebo_model]}/#{@opts[:gazebo_model]}.sdf",
+  world_sdf: "worlds/empty.world",
+  model_sdf: "models/#{@opts[:gazebo_model]}/#{@opts[:gazebo_model]}.sdf",
 
-  workspace_world: "ws.world",
+  workspace_model_sdf: "ws.sdf",
   workspace_firmware: "fw"
 }
 
@@ -384,6 +403,6 @@ end
 sleep 1
 
 #start
-start_firmware() unless @opts[:hitl]
 start_gazebo()
+start_firmware() unless @opts[:hitl]
 start_mavros() unless @opts[:restart] or @opts[:nomavros]
