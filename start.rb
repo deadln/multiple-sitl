@@ -52,17 +52,25 @@ def check_expanded_path(file_name, dir = nil, msg = nil)
 end
 
 def expand_firmware_files()
+  for sym in [:firmware_build, :firmware_etc]
+    @abs[sym] = check_expanded_path(@rels[sym], @abs[:firmware])
+  end
+
+  for sym in [:firmware_bin, :firmware_sg_build]
+    @abs[sym] = check_expanded_path(@rels[sym], @abs[:firmware_build])
+  end
+
   def_firmware_initd = File.expand_path(@rels[:firmware_initd], @abs[:firmware_etc])
 
   for sym in [:firmware_rc, :firmware_vars, :firmware_params, :firmware_mavlink]
-    #default
-    @abs[sym] = check_expanded_path(@rels[sym], def_firmware_initd)
-
     #set by user
     if @abs[:firmware_initd]
       p = File.expand_path(@rels[sym], @abs[:firmware_initd])
       @abs[sym] = p if File.exist?(p)
     end
+
+    #default
+    @abs[sym] = check_expanded_path(@rels[sym], def_firmware_initd) unless @abs[sym]
   end
 end
 
@@ -104,13 +112,12 @@ def expand_and_check()
   end
 
   #set defaults if not set
-  for sym in [:firmware, :sitl_gazebo]
+  for sym in [:firmware]
     @abs[sym] = check_expanded_path(@rels[sym], @abs[:home]) unless @abs[sym]
   end
 
-  #check firmware paths
-  for sym in [:firmware_bin, :firmware_etc]
-    @abs[sym] = check_expanded_path(@rels[sym], @abs[:firmware])
+  for sym in [:sitl_gazebo]
+    @abs[sym] = check_expanded_path(@rels[sym], @abs[:firmware]) unless @abs[sym]
   end
 
   #check firmware files
@@ -176,7 +183,7 @@ def generate_model(tags_values, split = false)
   if split
     split_arr = []
   end
-  
+
   @contents[:model_sdf].each_line {|l|
     found = false
     tags_values.each { |k, v|
@@ -185,7 +192,7 @@ def generate_model(tags_values, split = false)
           split_arr << out
           out = ""
         end
-        
+
         s = "      <#{k}>#{v}</#{k}>\n"
         if split
           split_arr << s
@@ -197,17 +204,17 @@ def generate_model(tags_values, split = false)
         break
       end
     }
-    
+
     unless found
       out << l
     end
   }
-  
+
   if split
     split_arr << out
     return split_arr
   end
-  
+
   out
 end
 
@@ -222,15 +229,15 @@ def start_gazebo()
 
   @contents[:model_sdf] = generate_model(@opts[:go]) unless @opts[:go].empty?
   port_param = @opts[:udp_sitl] ? 'mavlink_udp_port' : 'mavlink_tcp_port'
-  
+
   parts = generate_model({port_param => ''}, true) #three parts: part before, tag line and part after
-  
-  xspawn("gazebo", @abs[:home] + "/gazebo.sh #{@abs[:world_sdf]} #{@abs[:gazebo]} #{@abs[:sitl_gazebo]}", @opts[:debug])
+
+  xspawn("gazebo", @abs[:home] + "/gazebo.sh #{@abs[:world_sdf]} #{@abs[:firmware_sg_build]} #{@abs[:gazebo]} #{@abs[:sitl_gazebo]}", @opts[:debug])
   sleep 2
 
   iterate_instances { |m_index, m_num, model_name, ports|
     x = m_index*@opts[:distance]
-    
+
     File.open(@abs[:workspace_model_sdf], 'w') do |out|
       parts.each_with_index do |p, i|
         if i == 1 #tag line with port_param
@@ -357,10 +364,11 @@ end
 
 #relative paths
 @rels = {
-  sitl_gazebo: "../sitl_gazebo.m",
-
   firmware: "../../",
-    firmware_bin: "build/px4_sitl_#{@opts[:build_label]}/bin/px4",
+    sitl_gazebo: "Tools/sitl_gazebo",
+    firmware_build: "build/px4_sitl_#{@opts[:build_label]}",
+      firmware_bin: "bin/px4",
+      firmware_sg_build: "build_gazebo",
     firmware_etc: "ROMFS/px4fmu_common",
       firmware_initd: "init.d-posix",
         firmware_rc: "rcS",

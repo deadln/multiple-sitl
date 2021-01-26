@@ -10,12 +10,16 @@ GAZEBO=gazebo
 #GAZEBO=gzserver
 
 gazebo_world=$1
-shift
+plugin_path=$2
+
+shift 2
 
 for g;do
   GAZEBO_PLUGIN_PATH=${GAZEBO_PLUGIN_PATH}:$g/build
   GAZEBO_MODEL_PATH=${GAZEBO_MODEL_PATH}:$g/models
 done
+
+GAZEBO_PLUGIN_PATH=${GAZEBO_PLUGIN_PATH}:$plugin_path
 
 # Set the plugin path so Gazebo finds our model and sim
 export GAZEBO_PLUGIN_PATH

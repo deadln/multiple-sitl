@@ -18,7 +18,7 @@ apt install ros-${ros_release}-mavros -y
 /opt/ros/${ros_release}/lib/mavros/install_geographiclib_datasets.sh
 
 #catkin
-apt install python3-wstool python3-catkin-tools -y
+apt install python3-wstool python3-catkin-tools python3-osrf-pycommon -y
 
 #clean
 apt clean
