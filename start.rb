@@ -219,10 +219,23 @@ def generate_model(tags_values, split = false)
 end
 
 def start_gazebo()
-  if @opts[:restart]
-    system("gz world -o")
-    return
-  end
+  env = {
+    'GAZEBO_PLUGIN_PATH'=> 'build',
+    'GAZEBO_MODEL_PATH'=> 'models'
+  }
+
+  env.each { |k,v|
+    env[k] = ''
+    for sym in [:gazebo, :sitl_gazebo]
+      p = @abs[sym] + '/' + v
+      if sym == :sitl_gazebo and k == 'GAZEBO_PLUGIN_PATH' and @opts[:sitl_gazebo] == nil
+        p = @abs[:firmware_sg_build]
+      end
+
+      env[k] += p + ':'
+    end
+  }
+  cmd = @abs[:home] + "/gz_env.sh "
 
   #paths
   mkdir_p @abs[:workspace]
@@ -232,7 +245,7 @@ def start_gazebo()
 
   parts = generate_model({port_param => ''}, true) #three parts: part before, tag line and part after
 
-  xspawn("gazebo", @abs[:home] + "/gazebo.sh #{@abs[:world_sdf]} #{@abs[:firmware_sg_build]} #{@abs[:gazebo]} #{@abs[:sitl_gazebo]}", @opts[:debug])
+  xspawn("gazebo", cmd + "gazebo --verbose #{@abs[:world_sdf]}", @opts[:debug], env)
   sleep 2
 
   iterate_instances { |m_index, m_num, model_name, ports|
@@ -247,9 +260,10 @@ def start_gazebo()
       end
     end
 
-    env = {'GAZEBO_MASTER_URI' => '127.0.0.1:11345', 'GAZEBO_IP' => '127.0.0.1'}
-    system(env, "gz model #{@opts[:debug] ? '--verbose ' : ''}-m #{model_name} -f #{@abs[:workspace_model_sdf]} -x #{x}")
+    system(env, cmd + "gz model --verbose -m #{model_name} -f #{@abs[:workspace_model_sdf]} -x #{x}", @opts[:debug] ? {} : {[:out, :err]=>"/dev/null"})
   }
+
+  sleep 3
 end
 
 def start_mavros()
@@ -346,8 +360,6 @@ OptionParser.new do |op|
   op.on("--single", "single mavros node")
   op.on("--hitl", "HITL mode")
 
-  op.on("--restart", "soft restart")
-
   op.on("-h", "--help", "help and show defaults") do
     puts op
     puts "\nDefault options: #{@opts}"
@@ -402,15 +414,10 @@ load_contents()
 #init
 cd @abs[:home]
 
-if @opts[:restart]
-  puts "restarting ..."
-  system("./kill_px4.sh")
-else
-  system("./kill_sitl.sh")
-end
+system("./stop.sh")
 sleep 1
 
 #start
 start_gazebo()
 start_firmware() unless @opts[:hitl]
-start_mavros() unless @opts[:restart] or @opts[:nomavros]
+start_mavros() unless @opts[:nomavros]
