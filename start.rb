@@ -244,6 +244,10 @@ def start_gazebo()
   port_param = @opts[:udp_sitl] ? 'mavlink_udp_port' : 'mavlink_tcp_port'
 
   parts = generate_model({port_param => ''}, true) #three parts: part before, tag line and part after
+  if parts.size == 1 #not found
+    puts(port_param + ' not found in ' + @abs[:model_sdf])
+    exit
+  end
 
   xspawn("gazebo", cmd + "gazebo --verbose #{@abs[:world_sdf]}", @opts[:debug], env)
   sleep 2
@@ -374,6 +378,8 @@ if @opts[:hitl]
     @opts[:go][:hil_mode] = 1
 end
 
+@opts[:go][:use_tcp] = @opts[:udp_sitl] ? 0 : 1
+
 #relative paths
 @rels = {
   firmware: "../../",
@@ -384,9 +390,9 @@ end
     firmware_etc: "ROMFS/px4fmu_common",
       firmware_initd: "init.d-posix",
         firmware_rc: "rcS",
-        firmware_vars: "px4-vars.sh",
-        firmware_params: "px4-params.sh",
-        firmware_mavlink: "px4-mavlink.sh",
+        firmware_vars: "rc.vars",
+        firmware_params: "rc.params",
+        firmware_mavlink: "rc.mavlink",
 
   world_sdf: "worlds/empty.world",
   model_sdf: "models/#{@opts[:gazebo_model]}/#{@opts[:gazebo_model]}.sdf",
