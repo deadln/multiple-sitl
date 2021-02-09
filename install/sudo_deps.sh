@@ -17,9 +17,7 @@ apt install libopencv-dev libeigen3-dev protobuf-compiler libprotobuf-dev libpro
 
 #px4
 apt install git wget zip cmake build-essential genromfs -y
-# python-argparse
-# python-jinja2 python-numpy python-yaml -y
-#python-toml
+apt install python3-jinja2 python3-toml python3-numpy python3-empy python3-genmsg python3-packaging python3-yaml -y
 
 #start script
 apt install ruby xterm -y
