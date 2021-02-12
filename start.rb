@@ -143,7 +143,7 @@ def load_contents()
   end
 
   #check sitl_gazebo bug/feature: imu plugin block must be on the last
-  if not @contents[:model_sdf].match?(/.+libgazebo_imu_plugin.+<\/plugin>\s*<\/model>\s*<\/sdf>/m)
+  if @opts[:n]>1 and not @contents[:model_sdf].match?(/.+libgazebo_imu_plugin.+<\/plugin>\s*<\/model>\s*<\/sdf>/m)
     puts(@abs[:model_sdf] + ': imu plugin block must be just before </model> tag')
     exit
   end
@@ -252,7 +252,7 @@ def start_gazebo()
 
   parts = generate_model({port_param => ''}, true) #three parts: part before, tag line and part after
   if parts.size == 1 #not found
-    puts(@abs[:model_sdf] + ': ' + port_param + ' tag not found')
+    puts(@abs[:model_sdf] + ': ' + port_param + ' tag not found, add/remove --udp_sitl')
     exit
   end
 
@@ -271,7 +271,7 @@ def start_gazebo()
       end
     end
 
-    system(env, cmd + "gz model --verbose -m #{model_name} -f #{@abs[:workspace_model_sdf]} -x #{x}", @opts[:debug] ? {} : {[:out, :err]=>"/dev/null"})
+    system(env, cmd + "gz model --verbose -m #{model_name} -f #{@abs[:workspace_model_sdf]} -x #{x} -z 0.5", @opts[:debug] ? {} : {[:out, :err]=>"/dev/null"})
   }
 
   sleep 3
