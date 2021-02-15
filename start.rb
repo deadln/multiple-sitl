@@ -141,13 +141,6 @@ def load_contents()
   for sym in [:world_sdf, :model_sdf]
     @contents[sym] = File.read(@abs[sym]) if @abs[sym]
   end
-
-  #check sitl_gazebo bug/feature: imu plugin block must be on the last
-  if @opts[:n]>1 and not @contents[:model_sdf].match?(/.+libgazebo_imu_plugin.+<\/plugin>\s*<\/model>\s*<\/sdf>/m)
-    puts(@abs[:model_sdf] + ': imu plugin block must be just before </model> tag')
-    exit
-  end
-
 end
 
 def iterate_instances
@@ -246,6 +239,12 @@ def start_gazebo()
 
   #paths
   mkdir_p @abs[:workspace]
+
+  #sitl_gazebo bug/feature: imu plugin block must be on the last
+  m = /(.+)(<plugin.*imu_plugin.*?plugin>)(.*)(<\/model>\s*<\/sdf>)/m.match(@contents[:model_sdf])
+  if m
+    @contents[:model_sdf] = m[1] + m[3] + m[2] + m[4]
+  end
 
   @contents[:model_sdf] = generate_model(@opts[:go]) unless @opts[:go].empty?
   port_param = @opts[:udp_sitl] ? 'mavlink_udp_port' : 'mavlink_tcp_port'
