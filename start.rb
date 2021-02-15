@@ -21,7 +21,7 @@ def create_fcu_files()
     out.puts "PX4_ESTIMATOR=#{@opts[:firmware_estimator]}"
 
     out.puts "base_port=$((#{@opts[:ports_base]}+inst*#{@opts[:ports_step]}))"
-    out.puts "simulator_opts=\"-#{@opts[:udp_sitl] ? 'u' : 'c'} $((base_port+#{@opts[:pd_sim]}))\""
+    out.puts "simulator_opts=\"-#{@opts[:use_tcp] ? 'c' : 'u'} $((base_port+#{@opts[:pd_sim]}))\""
 
     out.puts "udp_gcs_port_local=$((base_port+#{@opts[:pd_gcs]}))"
     out.puts "udp_offboard_port_local=$((base_port+#{@opts[:pd_offb]}))"
@@ -247,11 +247,11 @@ def start_gazebo()
   end
 
   @contents[:model_sdf] = generate_model(@opts[:go]) unless @opts[:go].empty?
-  port_param = @opts[:udp_sitl] ? 'mavlink_udp_port' : 'mavlink_tcp_port'
+  port_param = @opts[:use_tcp] ? 'mavlink_tcp_port' : 'mavlink_udp_port'
 
   parts = generate_model({port_param => ''}, true) #three parts: part before, tag line and part after
   if parts.size == 1 #not found
-    puts(@abs[:model_sdf] + ': ' + port_param + ' tag not found, add/remove --udp_sitl')
+    puts(@abs[:model_sdf] + ': ' + port_param + ' tag not found, add/remove --use_tcp')
     exit
   end
 
@@ -362,7 +362,7 @@ OptionParser.new do |op|
     end
   end
 
-  op.on("--udp_sitl", "SITL with udp exchange")
+  op.on("--use_tcp", "SITL with tcp exchange")
   op.on("--distance DISTANCE", Integer, "distance between models")
   op.on("--firmware PATH", "path to firmware folder")
   op.on("--sitl_gazebo PATH", "path to sitl_gazebo folder")
@@ -384,7 +384,7 @@ if @opts[:hitl]
     @opts[:go][:hil_mode] = 1
 end
 
-@opts[:go][:use_tcp] = @opts[:udp_sitl] ? 0 : 1
+@opts[:go][:use_tcp] = @opts[:use_tcp] ? 1 : 0
 
 #relative paths
 @rels = {
