@@ -12,32 +12,34 @@ def xspawn(term_name, cmd, debug = false, env = {})
 end
 
 def create_fcu_files()
-  for sym in [:firmware_rc, :firmware_vars, :firmware_params, :firmware_mavlink]
-    cp @abs[sym], '.'
-  end
+  mkdir_p @abs[:workspace_firmware]
+  cd(@abs[:workspace_firmware]) {
+    for sym in [:firmware_rc, :firmware_vars, :firmware_params, :firmware_mavlink]
+      cp @abs[sym], '.'
+    end
 
-  File.open(@rels[:firmware_vars], 'a') do |out|
-    out.puts "PX4_SIM_MODEL=#{@opts[:firmware_model] || @opts[:gazebo_model]}"
-    out.puts "PX4_ESTIMATOR=#{@opts[:firmware_estimator]}"
+    File.open(@rels[:firmware_vars], 'a') do |out|
+      out.puts "PX4_SIM_MODEL=#{@opts[:firmware_model] || @opts[:gazebo_model]}"
+      out.puts "PX4_ESTIMATOR=#{@opts[:firmware_estimator]}"
 
-    out.puts "base_port=$((#{@opts[:ports_base]}+inst*#{@opts[:ports_step]}))"
-    out.puts "simulator_opts=\"-#{@opts[:use_tcp] ? 'c' : 'u'} $((base_port+#{@opts[:pd_sim]}))\""
+      out.puts "base_port=$((#{@opts[:ports_base]}+inst*#{@opts[:ports_step]}))"
+      out.puts "simulator_opts=\"-#{@opts[:use_tcp] ? 'c' : 'u'} $((base_port+#{@opts[:pd_sim]}))\""
 
-    out.puts "udp_gcs_port_local=$((base_port+#{@opts[:pd_gcs]}))"
-    out.puts "udp_offboard_port_local=$((base_port+#{@opts[:pd_offb]}))"
-    out.puts "udp_onboard_payload_port_local=$((base_port+#{@opts[:pd_payl]}))"
+      out.puts "udp_gcs_port_local=$((base_port+#{@opts[:pd_gcs]}))"
+      out.puts "udp_offboard_port_local=$((base_port+#{@opts[:pd_offb]}))"
+      out.puts "udp_onboard_payload_port_local=$((base_port+#{@opts[:pd_payl]}))"
 
-    out.puts "udp_gcs_port_remote=$((base_port+#{@opts[:pd_gcs_out]}))"
-    out.puts "udp_offboard_port_remote=$((base_port+#{@opts[:pd_offb_out]}))"
-    out.puts "udp_onboard_payload_port_remote=$((base_port+#{@opts[:pd_payl_out]}))"
-  end
+      out.puts "udp_gcs_port_remote=$((base_port+#{@opts[:pd_gcs_out]}))"
+      out.puts "udp_offboard_port_remote=$((base_port+#{@opts[:pd_offb_out]}))"
+      out.puts "udp_onboard_payload_port_remote=$((base_port+#{@opts[:pd_payl_out]}))"
+    end
 
-  File.open(@rels[:firmware_params], 'a') do |out|
-    out.puts "param set SDLOG_MODE -1" unless @opts[:logging]
-    #TODO
-    out.puts "param set MAV_USEHILGPS 1" if @opts[:hil_gps]
-  end
-
+    File.open(@rels[:firmware_params], 'a') do |out|
+      out.puts "param set SDLOG_MODE -1" unless @opts[:logging]
+      #TODO
+      out.puts "param set MAV_USEHILGPS 1" if @opts[:hil_gps]
+    end
+  }
 end
 
 def check_expanded_path(file_name, dir = nil, msg = nil)
@@ -160,65 +162,33 @@ def iterate_instances
   }
 end
 
-def start_firmware()
+def start_firmware(m_index, m_num, model_name, ports)
   fw_name = @rels[:firmware_bin].split('/').last
 
-  mkdir_p @abs[:workspace_firmware]
   cd(@abs[:workspace_firmware]) {
-    create_fcu_files()
-
-    iterate_instances { |m_index, m_num, model_name, ports|
-      #firmware instance
-      mkdir_p model_name
-      cd(model_name) {
-        #run
-        xspawn("#{fw_name}-#{m_num}", "#{@abs[:firmware_bin]} #{@opts[:debug] ? '' : '-d'} -i #{m_index} -s ../#{@rels[:firmware_rc]} #{@abs[:firmware_etc]}", @opts[:debug], {'PATH'=> ENV['PATH'] + ':../'})
-      }
+    #firmware instance
+    mkdir_p model_name
+    cd(model_name) {
+      #run
+      xspawn("#{fw_name}-#{m_num}", "#{@abs[:firmware_bin]} #{@opts[:debug] ? '' : '-d'} -i #{m_index} -s ../#{@rels[:firmware_rc]} #{@abs[:firmware_etc]}", @opts[:debug], {'PATH'=> ENV['PATH'] + ':../'})
     }
   }
 end
 
-def generate_model(tags_values, split = false)
-  out = ""
-  if split
-    split_arr = []
-  end
+def update_model(tags_values)
+  ok = true
 
-  @contents[:model_sdf].each_line {|l|
-    found = false
-    tags_values.each { |k, v|
-      if l =~ /.*<#{k}>.*\n/
-        if split
-          split_arr << out
-          out = ""
-        end
-
-        s = "      <#{k}>#{v}</#{k}>\n"
-        if split
-          split_arr << s
-        else
-          out << s
-        end
-
-        found = true
-        break
-      end
-    }
-
-    unless found
-      out << l
+  tags_values.each { |k, v|
+    if @contents[:model_sdf].sub!(/<#{k}>.+<\/#{k}>/,"<#{k}>#{v}</#{k}>") == nil
+      puts("#{k} tag not found in #{@abs[:model_sdf]}")
+      ok = false
     end
   }
 
-  if split
-    split_arr << out
-    return split_arr
-  end
-
-  out
+  ok
 end
 
-def start_gazebo()
+def gz_env()
   env = {
     'GAZEBO_PLUGIN_PATH'=> 'build',
     'GAZEBO_MODEL_PATH'=> 'models'
@@ -235,45 +205,61 @@ def start_gazebo()
       env[k] += p + ':'
     end
   }
-  cmd = @abs[:home] + "/gz_env.sh "
+  cmd = @abs[:home] + "/gz_env.sh"
+
+  return env, cmd
+end
+
+
+def start_gazebo()
+  env, cmd = gz_env()
 
   #paths
   mkdir_p @abs[:workspace]
 
   #sitl_gazebo bug/feature: imu plugin block must be on the last
-  m = /(.+)(<plugin.*imu_plugin.*?plugin>)(.*)(<\/model>\s*<\/sdf>)/m.match(@contents[:model_sdf])
+  m = /(.+)(<plugin.*imu_plugin.*?plugin>)(.*?)(<\/model>.*)/m.match(@contents[:model_sdf])
   if m
     @contents[:model_sdf] = m[1] + m[3] + m[2] + m[4]
   end
 
-  @contents[:model_sdf] = generate_model(@opts[:go]) unless @opts[:go].empty?
-  port_param = @opts[:use_tcp] ? 'mavlink_tcp_port' : 'mavlink_udp_port'
-
-  parts = generate_model({port_param => ''}, true) #three parts: part before, tag line and part after
-  if parts.size == 1 #not found
-    puts(@abs[:model_sdf] + ': ' + port_param + ' tag not found, add/remove --use_tcp')
+  if not update_model(@opts[:go])
+    puts("check -g options")
     exit
   end
 
-  xspawn("gazebo", cmd + "gazebo --verbose #{@abs[:world_sdf]}", @opts[:debug], env)
-  sleep 2
+  if not update_model({@opts[:use_tcp] ? 'mavlink_tcp_port' : 'mavlink_udp_port' => '__MAVLINK_PORT__'})
+    puts("add/remove --use_tcp option")
+    exit
+  end
 
-  iterate_instances { |m_index, m_num, model_name, ports|
-    x = m_index*@opts[:distance]
+  xspawn("gazebo", "#{cmd} gazebo --verbose #{@abs[:world_sdf]}", @opts[:debug], env)
+end
 
-    File.open(@abs[:workspace_model_sdf], 'w') do |out|
-      parts.each_with_index do |p, i|
-        if i == 1 #tag line with port_param
-          p = "      <#{port_param}>#{@opts[:hitl] ? ports[:offb] : ports[:sim]}</#{port_param}>\n"
-        end
-        out << p
-      end
-    end
+def gz_model(model_name, add_opts)
+  env, cmd = gz_env()
 
-    system(env, cmd + "gz model --verbose -m #{model_name} -f #{@abs[:workspace_model_sdf]} -x #{x} -z 0.5", @opts[:debug] ? {} : {[:out, :err]=>"/dev/null"})
-  }
+  system(env, "#{cmd} gz model --verbose -m #{model_name} -z 0.3 #{add_opts}", @opts[:debug] ? {} : {[:out, :err]=>"/dev/null"})
+end
 
-  sleep 3
+def insert_gz_model(m_index, m_num, model_name, ports)
+  env, cmd = gz_env()
+
+  port = @opts[:hitl] ? ports[:offb] : ports[:sim]
+  File.open(@abs[:workspace_model_sdf], 'w') do |out|
+    out << @contents[:model_sdf].sub('__MAVLINK_PORT__', port.to_s)
+  end
+
+  gz_model(model_name, "-f #{@abs[:workspace_model_sdf]} -x 0 -y 0")
+end
+
+def move_gz_model(m_index, m_num, model_name, ports)
+  env, cmd = gz_env()
+
+  l = m_index*@opts[:distance]
+  r = (@opts[:n]-1)*@opts[:distance]/2.0
+
+  gz_model(model_name, "-x -#{@opts[:distance]} -y #{l - r}")
 end
 
 def start_mavros()
@@ -317,7 +303,7 @@ end
   pd_sim: 9,
   pd_gcs_mavros: 2000,
 
-  distance: 2,
+  distance: 2.2,
   build_label: "default",
 
   workspace: "workspace",
@@ -431,5 +417,16 @@ sleep 1
 
 #start
 start_gazebo()
-start_firmware() unless @opts[:hitl]
+sleep 2
+
+create_fcu_files()
+
+iterate_instances { |m_index, m_num, model_name, ports|
+  sleep 0.5
+  start_firmware(m_index, m_num, model_name, ports) unless @opts[:hitl]
+  insert_gz_model(m_index, m_num, model_name, ports)
+  sleep 1
+  move_gz_model(m_index, m_num, model_name, ports)
+}
+
 start_mavros() unless @opts[:nomavros]
