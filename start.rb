@@ -239,7 +239,7 @@ end
 def gz_model(model_name, add_opts)
   env, cmd = gz_env()
 
-  system(env, "#{cmd} gz model --verbose -m #{model_name} -z 0.3 #{add_opts}", @opts[:debug] ? {} : {[:out, :err]=>"/dev/null"})
+  system(env, "#{cmd} gz model --verbose -m #{model_name} -z #{@opts[:ref_point][2]} #{add_opts}", @opts[:debug] ? {} : {[:out, :err]=>"/dev/null"})
 end
 
 def insert_gz_model(m_index, m_num, model_name, ports)
@@ -250,7 +250,7 @@ def insert_gz_model(m_index, m_num, model_name, ports)
     out << @contents[:model_sdf].sub('__MAVLINK_PORT__', port.to_s)
   end
 
-  gz_model(model_name, "-f #{@abs[:workspace_model_sdf]} -x 0 -y 0")
+  gz_model(model_name, "-f #{@abs[:workspace_model_sdf]} -x #{@opts[:ref_point][0]} -y #{@opts[:ref_point][1]}")
 end
 
 def move_gz_model(m_index, m_num, model_name, ports)
@@ -259,7 +259,7 @@ def move_gz_model(m_index, m_num, model_name, ports)
   l = m_index*@opts[:distance]
   r = (@opts[:n]-1)*@opts[:distance]/2.0
 
-  gz_model(model_name, "-x -#{@opts[:distance]} -y #{l - r}")
+  gz_model(model_name, "-x #{@opts[:ref_point][0] - @opts[:distance]} -y #{@opts[:ref_point][1] + l - r}")
 end
 
 def start_mavros()
@@ -304,6 +304,7 @@ end
   pd_gcs_mavros: 2000,
 
   distance: 2.2,
+  ref_point: [0, 0, 0.1],
   build_label: "default",
 
   workspace: "workspace",
@@ -350,6 +351,7 @@ OptionParser.new do |op|
 
   op.on("--use_tcp", "SITL with tcp exchange")
   op.on("--distance DISTANCE", Integer, "distance between models")
+  op.on("--ref_point x,y,z", Array, "gazebo coordinates to insert models (px4 reference point)")
   op.on("--firmware PATH", "path to firmware folder")
   op.on("--sitl_gazebo PATH", "path to sitl_gazebo folder")
   op.on("--build_label NAME", "build label")
@@ -364,6 +366,8 @@ OptionParser.new do |op|
   end
 end.parse!(into: @opts)
 @opts[:world_sdf] = ARGV[0]
+
+@opts[:ref_point].map! { |s| s.to_f }
 
 if @opts[:hitl]
     @opts[:go][:serialEnabled] = 1
