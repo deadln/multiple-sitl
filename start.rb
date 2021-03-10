@@ -233,6 +233,11 @@ def start_gazebo()
     exit
   end
 
+  if @opts[:gazebo_ros]
+    xspawn("", "roscore")
+    cmd += " rosrun gazebo_ros"
+  end
+
   xspawn("gazebo", "#{cmd} gazebo --verbose #{@abs[:world_sdf]}", @opts[:debug], env)
 end
 
@@ -259,7 +264,10 @@ def move_gz_model(m_index, m_num, model_name, ports)
   l = m_index*@opts[:distance]
   r = (@opts[:n]-1)*@opts[:distance]/2.0
 
-  gz_model(model_name, "-x #{@opts[:ref_point][0] - @opts[:distance]} -y #{@opts[:ref_point][1] + l - r}")
+  x = @opts[:ref_point][0] - @opts[:distance]
+  y = @opts[:ref_point][1] + l - r
+
+  gz_model(model_name, "-x #{x} -y #{y}")
 end
 
 def start_mavros()
@@ -357,6 +365,7 @@ OptionParser.new do |op|
   op.on("--build_label NAME", "build label")
   op.on("--single", "single mavros node")
   op.on("--hitl", "HITL mode")
+  op.on("--gazebo_ros", "use gazebo_ros")
 
   op.on("-h", "--help", "help and show defaults") do
     puts op
