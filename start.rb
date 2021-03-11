@@ -109,7 +109,7 @@ def expand_and_check()
   end
 
   #check
-  for sym in [:firmware, :sitl_gazebo, :plugin_lists, :world_sdf, :firmware_initd]
+  for sym in [:firmware, :sitl_gazebo, :plugin_lists, :world_sdf, :firmware_initd, :pose_list]
     @abs[sym] = check_expanded_path(@opts[sym]) if @opts[sym]
   end
 
@@ -140,8 +140,12 @@ end
 def load_contents()
   #contents
   @contents = {}
-  for sym in [:world_sdf, :model_sdf]
+  for sym in [:world_sdf, :model_sdf, :pose_list]
     @contents[sym] = File.read(@abs[sym]) if @abs[sym]
+  end
+
+  if @contents[:pose_list]
+    @contents[:pose_list] = @contents[:pose_list].split("\n").map{ |l| l.strip.split }
   end
 end
 
@@ -244,7 +248,7 @@ end
 def gz_model(model_name, add_opts)
   env, cmd = gz_env()
 
-  system(env, "#{cmd} gz model --verbose -m #{model_name} -z #{@opts[:ref_point][2]} #{add_opts}", @opts[:debug] ? {} : {[:out, :err]=>"/dev/null"})
+  system(env, "#{cmd} gz model --verbose -m #{model_name} #{add_opts}", @opts[:debug] ? {} : {[:out, :err]=>"/dev/null"})
 end
 
 def insert_gz_model(m_index, m_num, model_name, ports)
@@ -255,7 +259,7 @@ def insert_gz_model(m_index, m_num, model_name, ports)
     out << @contents[:model_sdf].sub('__MAVLINK_PORT__', port.to_s)
   end
 
-  gz_model(model_name, "-f #{@abs[:workspace_model_sdf]} -x #{@opts[:ref_point][0]} -y #{@opts[:ref_point][1]}")
+  gz_model(model_name, "-f #{@abs[:workspace_model_sdf]} -x #{@opts[:ref_point][0]} -y #{@opts[:ref_point][1]} -z #{@opts[:ref_point][2]}")
 end
 
 def move_gz_model(m_index, m_num, model_name, ports)
@@ -264,10 +268,30 @@ def move_gz_model(m_index, m_num, model_name, ports)
   l = m_index*@opts[:distance]
   r = (@opts[:n]-1)*@opts[:distance]/2.0
 
-  x = @opts[:ref_point][0] - @opts[:distance]
-  y = @opts[:ref_point][1] + l - r
+  #relative pose
+  p = [
+    - @opts[:distance],
+    l - r,
+    0,
+    0, 0, 0
+  ]
 
-  gz_model(model_name, "-x #{x} -y #{y}")
+  if @contents[:pose_list]
+    pose = @contents[:pose_list][m_index]
+    if pose
+      pose.each_index { |i|
+        p[i] = pose[i].to_f if p[i]
+      }
+    end
+  end
+
+  #absolute pose
+  @opts[:ref_point].each_index { |i|
+    p[i] += @opts[:ref_point][i]
+  }
+  o = ['x', 'y', 'z', 'R', 'P', 'Y'].map.with_index {|x, i| "-#{x} #{p[i]}"}
+
+  gz_model(model_name, o.join(' '))
 end
 
 def start_mavros()
@@ -366,6 +390,7 @@ OptionParser.new do |op|
   op.on("--single", "single mavros node")
   op.on("--hitl", "HITL mode")
   op.on("--gazebo_ros", "use gazebo_ros")
+  op.on("--pose_list PATH", "path to models pose list")
 
   op.on("-h", "--help", "help and show defaults") do
     puts op
