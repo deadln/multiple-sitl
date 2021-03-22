@@ -6,6 +6,8 @@ source $dir/../params.sh
 
 #ROS
 
+rosdep update
+
 str="source /opt/ros/${ros_release}/setup.bash"
 rcfile=~/.bashrc
 

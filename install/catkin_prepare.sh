@@ -16,5 +16,5 @@ cd $catkin_ws
 wstool init src $rosinstall_file
 wstool update -t src -j4
 
-#rosdep install --from-paths src --ignore-src -y
+rosdep install --from-paths src --ignore-src -y
 catkin build
