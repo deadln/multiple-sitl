@@ -179,6 +179,28 @@ def start_firmware(m_index, m_num, model_name, ports)
   }
 end
 
+def wait_process(p_str, dt = 0.2, to_finish = true, timeout = 100000)
+  t = 0
+  ret = false
+  while true
+    IO.popen("pgrep -f '#{p_str}'") { |io|
+      pids = io.readlines.map { |p| p.to_i }
+      if to_finish
+        ret = pids.size == 1
+      else
+        ret = pids.size > 1
+      end
+    }
+    if ret or t>timeout
+      break
+    end
+    sleep dt
+    t+=dt
+  end
+
+  ret
+end
+
 def update_model(tags_values)
   ok = true
 
@@ -214,7 +236,6 @@ def gz_env()
   return env, cmd
 end
 
-
 def start_gazebo()
   env, cmd = gz_env()
 
@@ -238,7 +259,6 @@ def start_gazebo()
   end
 
   if @opts[:gazebo_ros]
-    xspawn("", "roscore")
     cmd += " rosrun gazebo_ros"
   end
 
@@ -294,24 +314,19 @@ def move_gz_model(m_index, m_num, model_name, ports)
   gz_model(model_name, o.join(' '))
 end
 
-def start_mavros()
-  cd("mavros") {
-    iterate_instances { |m_index, m_num, model_name, ports|
-      args={
-        num: m_num,
-        fcu_url: "udp://127.0.0.1:#{ports[:offb_out]}@127.0.0.1:#{ports[:offb]}",
-        gcs_inport: ports[:gcs_mavros]
-      }
-      args[:plugin_lists] = @abs[:plugin_lists] if @abs[:plugin_lists]
+def start_mavros(m_index, m_num, model_name, ports)
+  args={
+    num: m_num,
+    fcu_url: "udp://127.0.0.1:#{ports[:offb_out]}@127.0.0.1:#{ports[:offb]}",
+    gcs_inport: ports[:gcs_mavros]
+  }
+  args[:plugin_lists] = @abs[:plugin_lists] if @abs[:plugin_lists]
 
-      launch = "px4_#{@opts[:single] ? 'single' : 'num'}.launch"
-      args.each { |k, v| launch<<" #{k}:=#{v}" }
+  launch = "px4_#{@opts[:single] ? 'single' : 'num'}.launch"
+  args.each { |k, v| launch<<" #{k}:=#{v}" }
 
-      xspawn("mavros-#{m_num}", "./roslaunch.sh #{@abs[:catkin_ws]} #{launch}", @opts[:debug])
-      if m_num == 1
-        sleep 3
-      end
-    }
+  cd(@abs[:home] + "/mavros") {
+    xspawn("mavros-#{m_num}", "./roslaunch.sh #{@abs[:catkin_ws]} #{launch}", @opts[:debug])
   }
 end
 
@@ -409,6 +424,7 @@ if @opts[:hitl]
 end
 
 @opts[:go][:use_tcp] = @opts[:use_tcp] ? 1 : 0
+@opts[:go][:enable_lockstep] = 0 unless @opts[:go][:enable_lockstep]
 
 #relative paths
 @rels = {
@@ -454,17 +470,23 @@ system("./stop.sh")
 sleep 1
 
 #start
+if @opts[:gazebo_ros] or not @opts[:nomavros]
+  xspawn("", "roscore")
+end
+
 start_gazebo()
 sleep 2
 
 create_fcu_files()
 
 iterate_instances { |m_index, m_num, model_name, ports|
-  sleep 0.5
   start_firmware(m_index, m_num, model_name, ports) unless @opts[:hitl]
-  insert_gz_model(m_index, m_num, model_name, ports)
-  sleep 1
-  move_gz_model(m_index, m_num, model_name, ports)
-}
+  wait_process("simulator --instance #{m_index}", 0.1, false)
 
-start_mavros() unless @opts[:nomavros]
+  insert_gz_model(m_index, m_num, model_name, ports)
+  wait_process("rcS #{m_index}", 0.1)
+
+  move_gz_model(m_index, m_num, model_name, ports)
+
+  start_mavros(m_index, m_num, model_name, ports) unless @opts[:nomavros]
+}
