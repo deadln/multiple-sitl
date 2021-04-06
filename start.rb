@@ -326,7 +326,7 @@ def start_mavros(m_index, m_num, model_name, ports)
   args.each { |k, v| launch<<" #{k}:=#{v}" }
 
   cd(@abs[:home] + "/mavros") {
-    xspawn("mavros-#{m_num}", "./roslaunch.sh #{@abs[:catkin_ws]} #{launch}", @opts[:debug])
+    xspawn("mavros-#{m_num}", "./ros_env.sh #{@abs[:catkin_ws]} roslaunch #{launch}", @opts[:debug])
   }
 end
 
@@ -406,6 +406,7 @@ OptionParser.new do |op|
   op.on("--hitl", "HITL mode")
   op.on("--gazebo_ros", "use gazebo_ros")
   op.on("--pose_list PATH", "path to models pose list")
+  op.on("--nolockstep", "lockstep disabled")
 
   op.on("-h", "--help", "help and show defaults") do
     puts op
@@ -424,7 +425,11 @@ if @opts[:hitl]
 end
 
 @opts[:go][:use_tcp] = @opts[:use_tcp] ? 1 : 0
-@opts[:go][:enable_lockstep] = 0 unless @opts[:go][:enable_lockstep]
+
+if @opts[:nolockstep]
+  @opts[:go][:enable_lockstep] = 0
+  @opts[:build_label] = "nolockstep"
+end
 
 #relative paths
 @rels = {
@@ -444,7 +449,7 @@ end
   model_sdf: "models/#{@opts[:gazebo_model]}/#{@opts[:gazebo_model]}.sdf",
 
   workspace_model_sdf: "ws.sdf",
-  workspace_firmware: "fw"
+  workspace_firmware: "fw",
 }
 
 #script dir
@@ -469,24 +474,56 @@ cd @abs[:home]
 system("./stop.sh")
 sleep 1
 
-#start
-if @opts[:gazebo_ros] or not @opts[:nomavros]
-  xspawn("", "roscore")
-end
-
-start_gazebo()
-sleep 2
-
 create_fcu_files()
 
-iterate_instances { |m_index, m_num, model_name, ports|
-  start_firmware(m_index, m_num, model_name, ports) unless @opts[:hitl]
-  wait_process("simulator --instance #{m_index}", 0.1, false)
+#start
+if @opts[:gazebo_ros] or not @opts[:nomavros]
+  xspawn("", @abs[:home] + "/mavros/ros_env.sh #{@abs[:catkin_ws]} roscore")
+  sleep 3
+end
 
-  insert_gz_model(m_index, m_num, model_name, ports)
-  wait_process("rcS #{m_index}", 0.1)
+if @opts[:nolockstep]
 
-  move_gz_model(m_index, m_num, model_name, ports)
+  iterate_instances { |m_index, m_num, model_name, ports|
+    start_firmware(m_index, m_num, model_name, ports) unless @opts[:hitl]
+    start_mavros(m_index, m_num, model_name, ports) unless @opts[:nomavros]
+  }
 
-  start_mavros(m_index, m_num, model_name, ports) unless @opts[:nomavros]
-}
+  start_gazebo()
+  sleep 2
+
+  iterate_instances { |m_index, m_num, model_name, ports|
+    #start_mavros(m_index, m_num, model_name, ports) unless @opts[:nomavros]
+    insert_gz_model(m_index, m_num, model_name, ports)
+    #start_firmware(m_index, m_num, model_name, ports) unless @opts[:hitl]
+    wait_process("rcS #{m_index}", 0.2)
+    sleep 0.5
+
+    move_gz_model(m_index, m_num, model_name, ports)
+
+    sleep 0.5
+   }
+else
+
+  start_gazebo()
+  sleep 2
+  if @opts[:gazebo_ros]
+    sleep 3
+  end
+
+  iterate_instances { |m_index, m_num, model_name, ports|
+    start_mavros(m_index, m_num, model_name, ports) unless @opts[:nomavros]
+    start_firmware(m_index, m_num, model_name, ports) unless @opts[:hitl]
+    wait_process("simulator --instance #{m_index}", 0.1, false)
+
+    insert_gz_model(m_index, m_num, model_name, ports)
+
+    sleep 0.5
+    wait_process("rcS #{m_index}", 0.2)
+
+    move_gz_model(m_index, m_num, model_name, ports)
+
+    sleep 0.5
+   }
+
+end
