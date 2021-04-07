@@ -9,6 +9,7 @@ def xspawn(term_name, cmd, debug = false, env = {})
   term = debug ? "xterm -T #{term_name} -hold -e" : ""
   pid = spawn(env, "#{term} #{cmd}", [:out, :err]=>"/dev/null")
   Process.detach(pid)
+  pid
 end
 
 def create_fcu_files()
@@ -131,7 +132,7 @@ def expand_and_check()
   end
 
   #workspace
-  for sym in [:workspace_firmware, :workspace_model_sdf]
+  for sym in [:workspace_firmware, :workspace_model_sdf, :workspace_world_sdf, :workspace_model_opts]
     @abs[sym] = File.expand_path(@rels[sym], @abs[:workspace])
   end
 
@@ -220,9 +221,14 @@ def gz_env()
     'GAZEBO_MODEL_PATH'=> 'models'
   }
 
+  syms = [:gazebo, :sitl_gazebo]
+  if @opts[:nospawn]
+    syms.insert(0, :workspace)
+  end
+
   env.each { |k,v|
     env[k] = ''
-    for sym in [:gazebo, :sitl_gazebo]
+    for sym in syms
       p = @abs[sym] + '/' + v
       if sym == :sitl_gazebo and k == 'GAZEBO_PLUGIN_PATH' and @opts[:sitl_gazebo] == nil
         p = @abs[:firmware_sg_build]
@@ -232,6 +238,22 @@ def gz_env()
     end
   }
   cmd = @abs[:home] + "/gz_env.sh"
+
+
+  if @opts[:nospawn]
+    @opts[:home_dt] = 3 unless @opts[:home_dt]
+    @opts[:home_gps] = ['0', '0', '200'] unless @opts[:home_gps]
+  end
+
+  if @opts[:home_dt]
+    env['PX4_HOME_DT'] = @opts[:home_dt].to_s
+  end
+
+  if @opts[:home_gps]
+    env['PX4_HOME_LAT'] = @opts[:home_gps][0]
+    env['PX4_HOME_LON'] = @opts[:home_gps][1]
+    env['PX4_HOME_ALT'] = @opts[:home_gps][2]
+  end
 
   return env, cmd
 end
@@ -258,11 +280,49 @@ def start_gazebo()
     exit
   end
 
+  world_sdf = @abs[:world_sdf]
+  if @opts[:nospawn]
+    m_dir = @abs[:workspace] + "/models"
+    mkdir_p m_dir
+    cp_r(File.dirname(@abs[:model_sdf]), m_dir)
+
+    File.open(@abs[:workspace_model_sdf], 'w') do |out|
+      out << @contents[:model_sdf]
+    end
+
+    File.open(@abs[:workspace_model_opts], 'w') do |out|
+      out << "<?xml version=\"1.0\" ?>\n  <options>\n"
+      iterate_instances { |m_index, m_num, model_name, ports|
+        port = @opts[:hitl] ? ports[:offb] : ports[:sim]
+        out << "  <model name=\"#{model_name}\">" + xml_elements({@opts[:use_tcp] ? 'mavlink_tcp_port' : 'mavlink_udp_port' => port}) + "</model>\n"
+      }
+      out << "</options>"
+    end
+
+    model_incs = ""
+    iterate_instances { |m_index, m_num, model_name, ports|
+      model_incs += "\n    <include><name>#{model_name}</name><uri>model://#{@opts[:gazebo_model]}</uri><pose>#{poses(m_index).join(' ')}</pose></include>"
+    }
+
+    m = /(.+<world .*?>)(.*)/m.match(@contents[:world_sdf])
+    if m
+      @contents[:world_sdf] = m[1] + model_incs + m[2]
+    end
+
+    world_sdf = @abs[:workspace_world_sdf]
+    File.open(world_sdf, 'w') do |out|
+      out << @contents[:world_sdf]
+    end
+
+  end
+
   if @opts[:gazebo_ros]
     cmd += " rosrun gazebo_ros"
   end
 
-  xspawn("gazebo", "#{cmd} gazebo --verbose #{@abs[:world_sdf]}", @opts[:debug], env)
+  cd(@abs[:workspace]) {
+    xspawn("gazebo", "#{cmd} gazebo --verbose #{world_sdf}", @opts[:debug], env)
+  }
 end
 
 def gz_model(model_name, add_opts)
@@ -271,20 +331,8 @@ def gz_model(model_name, add_opts)
   system(env, "#{cmd} gz model --verbose -m #{model_name} #{add_opts}", @opts[:debug] ? {} : {[:out, :err]=>"/dev/null"})
 end
 
-def insert_gz_model(m_index, m_num, model_name, ports)
-  env, cmd = gz_env()
 
-  port = @opts[:hitl] ? ports[:offb] : ports[:sim]
-  File.open(@abs[:workspace_model_sdf], 'w') do |out|
-    out << @contents[:model_sdf].sub('__MAVLINK_PORT__', port.to_s)
-  end
-
-  gz_model(model_name, "-f #{@abs[:workspace_model_sdf]} -x #{@opts[:ref_point][0]} -y #{@opts[:ref_point][1]} -z #{@opts[:ref_point][2]}")
-end
-
-def move_gz_model(m_index, m_num, model_name, ports)
-  env, cmd = gz_env()
-
+def poses(m_index)
   l = m_index*@opts[:distance]
   r = (@opts[:n]-1)*@opts[:distance]/2.0
 
@@ -309,6 +357,26 @@ def move_gz_model(m_index, m_num, model_name, ports)
   @opts[:ref_point].each_index { |i|
     p[i] += @opts[:ref_point][i]
   }
+
+  p
+end
+
+def insert_gz_model(m_index, m_num, model_name, ports)
+  env, cmd = gz_env()
+
+  port = @opts[:hitl] ? ports[:offb] : ports[:sim]
+  File.open(@abs[:workspace_model_sdf], 'w') do |out|
+    out << @contents[:model_sdf].sub('__MAVLINK_PORT__', port.to_s)
+  end
+
+  gz_model(model_name, "-f #{@abs[:workspace_model_sdf]} -x #{@opts[:ref_point][0]} -y #{@opts[:ref_point][1]} -z #{@opts[:ref_point][2]}")
+end
+
+def move_gz_model(m_index, m_num, model_name, ports)
+  env, cmd = gz_env()
+
+  p = poses(m_index)
+
   o = ['x', 'y', 'z', 'R', 'P', 'Y'].map.with_index {|x, i| "-#{x} #{p[i]}"}
 
   gz_model(model_name, o.join(' '))
@@ -407,6 +475,9 @@ OptionParser.new do |op|
   op.on("--gazebo_ros", "use gazebo_ros")
   op.on("--pose_list PATH", "path to models pose list")
   op.on("--nolockstep", "lockstep disabled")
+  op.on("--nospawn", "without spawn")
+  op.on("--home_gps x,y,z", Array, "PX4_HOME_LAT, PX4_HOME_LON, PX4_HOME_ALT env variables")
+  op.on("--home_dt DT", Float, "PX4_HOME_DT env variable")
 
   op.on("-h", "--help", "help and show defaults") do
     puts op
@@ -450,7 +521,13 @@ end
 
   workspace_model_sdf: "ws.sdf",
   workspace_firmware: "fw",
+  workspace_world_sdf: "default.sdf",
+  workspace_model_opts: "default.xml",
 }
+
+if @opts[:nospawn]
+  @rels[:workspace_model_sdf] = @rels[:model_sdf]
+end
 
 #script dir
 @abs = {
@@ -477,10 +554,23 @@ sleep 1
 create_fcu_files()
 
 #start
+
 if @opts[:gazebo_ros] or not @opts[:nomavros]
   xspawn("", @abs[:home] + "/mavros/ros_env.sh #{@abs[:catkin_ws]} roscore")
   sleep 3
 end
+
+if @opts[:nospawn]
+  iterate_instances { |m_index, m_num, model_name, ports|
+    start_firmware(m_index, m_num, model_name, ports) unless @opts[:hitl]
+    start_mavros(m_index, m_num, model_name, ports) unless @opts[:nomavros]
+  }
+
+  start_gazebo()
+
+  exit
+end
+
 
 if @opts[:nolockstep]
 
