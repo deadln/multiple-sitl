@@ -202,6 +202,31 @@ def wait_process(p_str, dt = 0.2, to_finish = true, timeout = 100000)
   ret
 end
 
+def wait_firmware(m_index, cmd, dt = 0.2, wait_str=nil)
+  ret = false
+  run_cmd = "#{@abs[:firmware_bin]}-#{cmd} --instance #{m_index} status"
+
+  while true
+    if wait_str
+      IO.popen(run_cmd) {|io|
+        res = io.read
+        #puts(res)
+        ret = res.include?(wait_str)
+      }
+    else
+      ret = system(run_cmd)
+      #puts("exit_status: #{ret}")
+    end
+
+    if ret
+      break
+    end
+    sleep dt
+  end
+
+  ret
+end
+
 def update_model(tags_values)
   ok = true
 
@@ -567,6 +592,10 @@ if @opts[:nospawn]
   }
 
   start_gazebo()
+
+  iterate_instances { |m_index, m_num, model_name, ports|
+    wait_firmware(m_index, "ekf2", 1, ": valid")
+  }
 
   exit
 end
