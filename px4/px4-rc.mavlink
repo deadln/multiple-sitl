@@ -1,10 +1,5 @@
 #!/bin/sh
 
-# Arguments passed to this script:
-# $1: optional instance id
-inst=0
-[ -n "$1" ] && inst=$1
-
 # GCS link
 mavlink start -x -u $udp_gcs_port_local -r 10000 -o $udp_gcs_port_remote
 mavlink stream -r 50 -s POSITION_TARGET_LOCAL_NED -u $udp_gcs_port_local
@@ -18,6 +13,3 @@ mavlink stream -r 20 -s RC_CHANNELS -u $udp_gcs_port_local
 
 # API/Offboard link
 mavlink start -x -u $udp_offboard_port_local -r 10000 -m onboard -o $udp_offboard_port_remote
-
-# Onboard link to camera
-mavlink start -x -u $udp_onboard_payload_port_local -r 4000 -f -m onboard -o $udp_onboard_payload_port_remote

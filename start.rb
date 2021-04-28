@@ -15,30 +15,23 @@ end
 def create_fcu_files()
   mkdir_p @abs[:workspace_firmware]
   cd(@abs[:workspace_firmware]) {
-    for sym in [:firmware_rc, :firmware_vars, :firmware_params, :firmware_mavlink]
+    for sym in [:firmware_rc, :firmware_simulator, :firmware_params, :firmware_mavlink]
       cp @abs[sym], '.'
-    end
-
-    File.open(@rels[:firmware_vars], 'a') do |out|
-      out.puts "PX4_SIM_MODEL=#{@opts[:firmware_model] || @opts[:gazebo_model]}"
-      out.puts "PX4_ESTIMATOR=#{@opts[:firmware_estimator]}"
-
-      out.puts "base_port=$((#{@opts[:ports_base]}+inst*#{@opts[:ports_step]}))"
-      out.puts "simulator_opts=\"-#{@opts[:use_tcp] ? 'c' : 'u'} $((base_port+#{@opts[:pd_sim]}))\""
-
-      out.puts "udp_gcs_port_local=$((base_port+#{@opts[:pd_gcs]}))"
-      out.puts "udp_offboard_port_local=$((base_port+#{@opts[:pd_offb]}))"
-      out.puts "udp_onboard_payload_port_local=$((base_port+#{@opts[:pd_payl]}))"
-
-      out.puts "udp_gcs_port_remote=$((base_port+#{@opts[:pd_gcs_out]}))"
-      out.puts "udp_offboard_port_remote=$((base_port+#{@opts[:pd_offb_out]}))"
-      out.puts "udp_onboard_payload_port_remote=$((base_port+#{@opts[:pd_payl_out]}))"
     end
 
     File.open(@rels[:firmware_params], 'a') do |out|
       out.puts "param set SDLOG_MODE -1" unless @opts[:logging]
       #TODO
       out.puts "param set MAV_USEHILGPS 1" if @opts[:hil_gps]
+
+      out.puts "base_port=$((#{@opts[:ports_base]}+px4_instance*#{@opts[:ports_step]}))"
+      out.puts "simulator_opts=\"-#{@opts[:use_tcp] ? 'c' : 'u'} $((base_port+#{@opts[:pd_sim]}))\""
+
+      out.puts "udp_gcs_port_local=$((base_port+#{@opts[:pd_gcs]}))"
+      out.puts "udp_gcs_port_remote=$((base_port+#{@opts[:pd_gcs_out]}))"
+
+      out.puts "udp_offboard_port_local=$((base_port+#{@opts[:pd_offb]}))"
+      out.puts "udp_offboard_port_remote=$((base_port+#{@opts[:pd_offb_out]}))"
     end
   }
 end
@@ -65,12 +58,9 @@ def expand_firmware_files()
 
   def_firmware_initd = File.expand_path(@rels[:firmware_initd], @abs[:firmware_etc])
 
-  for sym in [:firmware_rc, :firmware_vars, :firmware_params, :firmware_mavlink]
-    #set by user
-    if @abs[:firmware_initd]
-      p = File.expand_path(@rels[sym], @abs[:firmware_initd])
-      @abs[sym] = p if File.exist?(p)
-    end
+  for sym in [:firmware_rc, :firmware_simulator, :firmware_params, :firmware_mavlink]
+    p = File.expand_path(@rels[sym], @abs[:firmware_initd])
+    @abs[sym] = p if File.exist?(p)
 
     #default
     @abs[sym] = check_expanded_path(@rels[sym], def_firmware_initd) unless @abs[sym]
@@ -118,6 +108,8 @@ def expand_and_check()
   for sym in [:firmware]
     @abs[sym] = check_expanded_path(@rels[sym], @abs[:home]) unless @abs[sym]
   end
+
+  @abs[:firmware_initd] = @abs[:home] + "/px4" unless @abs[:firmware_initd]
 
   for sym in [:sitl_gazebo]
     @abs[sym] = check_expanded_path(@rels[sym], @abs[:firmware]) unless @abs[sym]
@@ -169,13 +161,18 @@ end
 
 def start_firmware(m_index, m_num, model_name, ports)
   fw_name = @rels[:firmware_bin].split('/').last
+  env = {
+    'PATH' => ENV['PATH'] + ':../',
+    'PX4_SIM_MODEL' => @opts[:firmware_model] || @opts[:gazebo_model],
+    'PX4_ESTIMATOR' => @opts[:firmware_estimator]
+  }
 
   cd(@abs[:workspace_firmware]) {
     #firmware instance
     mkdir_p model_name
     cd(model_name) {
       #run
-      xspawn("#{fw_name}-#{m_num}", "#{@abs[:firmware_bin]} #{@opts[:debug] ? '' : '-d'} -i #{m_index} -s ../#{@rels[:firmware_rc]} #{@abs[:firmware_etc]}", @opts[:debug], {'PATH'=> ENV['PATH'] + ':../'})
+      xspawn("#{fw_name}-#{m_num}", "#{@abs[:firmware_bin]} #{@opts[:debug] ? '' : '-d'} -i #{m_index} -s ../#{@rels[:firmware_rc]} #{@abs[:firmware_etc]}", @opts[:debug], env)
     }
   }
 end
@@ -434,12 +431,11 @@ end
 
   ports_base: 15010,
   ports_step: 10,
+
   pd_gcs: 0,
   pd_gcs_out: 5,
   pd_offb: 1,
   pd_offb_out: 6,
-  pd_payl: 2,
-  pd_payl_out: 7,
   pd_sim: 9,
   pd_gcs_mavros: 2000,
 
@@ -537,9 +533,9 @@ end
     firmware_etc: "ROMFS/px4fmu_common",
       firmware_initd: "init.d-posix",
         firmware_rc: "rcS",
-        firmware_vars: "rc.vars",
-        firmware_params: "rc.params",
-        firmware_mavlink: "rc.mavlink",
+        firmware_simulator: "px4-rc.simulator",
+        firmware_params: "px4-rc.params",
+        firmware_mavlink: "px4-rc.mavlink",
 
   world_sdf: "worlds/empty.world",
   model_sdf: "models/#{@opts[:gazebo_model]}/#{@opts[:gazebo_model]}.sdf",
