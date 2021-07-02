@@ -338,7 +338,7 @@ if opts.key?(:gazebo_model2)# and opts.key?(:n2)
         rc_file = create_fcu_files(opts, m_num, abs, rels, contents, opts[:gazebo_model2])
 
         #run firmware
-        xspawn("#{fw_name}-#{m_num}", "#{abs[:firmware_bin]} #{opts[:debug] ? '' : '-d'} -i #{m_index} -s #{rc_file} #{abs[:firmware_etc]}", opts[:debug])
+        xspawn("#{fw_name}-#{m_num}", "#{abs[:firmware_bin]} #{opts[:debug] ? '' : '-d'} -i #{opts[:n]+m_index} -s #{rc_file} #{abs[:firmware_etc]}", opts[:debug])
       }
     } unless opts[:hitl]
 
