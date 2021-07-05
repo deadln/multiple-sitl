@@ -57,9 +57,9 @@ def create_fcu_files(opts, m_num, abs, rels, contents, model) # opts[:gazebo_mod
 
   unless File.exist?(rc_file)
     #generate rc file
-    rc = contents[:firmware_init_rc]#                                                                        vvvvvvvvvvvv
+    rc = contents[:firmware_init_rc]
     rc.sub!(/(SCRIPT_DIR=).*/,"\\1#{File.dirname(abs[:firmware_init_rc])}\nPX4_SIM_MODEL=#{opts[:i] || model}\nPX4_ESTIMATOR=#{opts[:f]}")
-#                                                                                                            ^^^^^^^^^^^^
+
     unless opts[:logging]
       rc.sub!(/.*rc\.logging.*\n/,'')
     end
@@ -158,6 +158,8 @@ op = OptionParser.new do |op|
     opts[:restart] = true
     puts "restarting ..."
   end
+
+  op.on("--n2 NUM", Integer, "number of instances of second model") { |p| opts[:n2] = p }
 
   op.on("-h", "help and show defaults") do
     puts op
@@ -260,7 +262,7 @@ model_incs = ""
 model_opts = ""
 model_opts += "  <model>" + xml_elements(opts[:o]) + "</model>\n" unless opts[:o].empty?
 opts[:n].times do |i|
-  x=i*opts[:distance]-5
+  x=i*opts[:distance]
   m_index=i
   m_num=i+1
 
@@ -290,7 +292,7 @@ opts[:n].times do |i|
   #generate model
   n = "<name>#{model_name}</name>"
 
-  model_incs += "    <include>#{n}<uri>model://#{opts[:gazebo_model]}</uri><pose>#{x} -5 0 0 0 0</pose></include>\n" unless contents[:gazebo_world].include?(n)
+  model_incs += "    <include>#{n}<uri>model://#{opts[:gazebo_model]}</uri><pose>#{x} 0 0 0 0 0</pose></include>\n" unless contents[:gazebo_world].include?(n)
 
   mavlink_port = opts[:hitl] ? @mav_port2 : @sim_port
   mo = {}
@@ -313,9 +315,9 @@ end
 
 # second model
 
-if opts.key?(:gazebo_model2)# and opts.key?(:n2)
-  opts[:n].times do |i|
-    x=(opts[:n]+i)*opts[:distance]
+if opts.key?(:gazebo_model2) and opts.key?(:n2)
+  opts[:n2].times do |i|
+    x=(opts[:n]+i)*opts[:distance]-5
     m_index=i
     m_num=opts[:n]+i+1
 
@@ -345,7 +347,7 @@ if opts.key?(:gazebo_model2)# and opts.key?(:n2)
     #generate model
     n = "<name>#{model_name}</name>"
 
-    model_incs += "    <include>#{n}<uri>model://#{opts[:gazebo_model2]}</uri><pose>#{x} 0 0 0 0 0</pose></include>\n" unless contents[:gazebo_world].include?(n)
+    model_incs += "    <include>#{n}<uri>model://#{opts[:gazebo_model2]}</uri><pose>#{x} -5 0 0 0 0</pose></include>\n" unless contents[:gazebo_world].include?(n)
 
     mavlink_port = opts[:hitl] ? @mav_port2 : @sim_port
     mo = {}
