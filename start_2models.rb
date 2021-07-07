@@ -33,7 +33,7 @@ opts = {
   base_port: 15010,
   port_step: 10,
   distance: 2,
-  build_label: "default",
+  build_label: "default", # defalut !!!
 
   workspace: "workspace",
   gazebo: "gazebo",
@@ -114,6 +114,31 @@ def xml_elements(kv)
   kv.each { |k, v| s<<"<#{k}>#{v}</#{k}>" }
 
   s
+end
+
+def wait_firmware(m_index, cmd, dt = 0.2, wait_str=nil, abs)
+  ret = false
+  run_cmd = "#{abs[:firmware_bin]}-#{cmd} --instance #{m_index} status"
+
+  while true
+    if wait_str
+      IO.popen(run_cmd) {|io|
+        res = io.read
+        #puts(res)
+        ret = res.include?(wait_str)
+      }
+    else
+      ret = system(run_cmd)
+      #puts("exit_status: #{ret}")
+    end
+
+    if ret
+      break
+    end
+    sleep dt
+  end
+
+  ret
 end
 
 #options
@@ -393,3 +418,8 @@ else
     xspawn("gazebo", abs[:home] + "/gazebo.sh #{rels[:workspace_world]} #{abs[:gazebo]} #{abs[:sitl_gazebo]}", opts[:debug])
   }
 end
+
+for i in (0..(opts[:n]+opts[:n2]-1))
+  wait_firmware(i, "ekf2", 1, ": valid", abs)
+end
+# /home/deadln/gazebo/mult_sitl2/Firmware/build/px4_sitl_default/bin/px4

@@ -29,4 +29,4 @@ export GAZEBO_MASTER_IP
 export GAZEBO_MASTER_URI=$GAZEBO_MASTER_IP:11345
 export GAZEBO_IP=$GAZEBO_MASTER_IP
 
-$GAZEBO --verbose $gazebo_world
+rosrun gazebo_ros $GAZEBO --verbose $gazebo_world
