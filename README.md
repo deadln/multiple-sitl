@@ -1,7 +1,19 @@
 # Описание
 Этот форк позволяет запускать симуляцию gazebo с двумя разными типасм моделями, работающими на прошивке PX4 и управляемыми с помощью MAVROS. Оригинальный [README](https://github.com/deadln/multiple-sitl/blob/develop/README).
 # Установка
-На вашем компьютере с ОС Ubuntu 20.04 должны быть установлены git (sudo apt install git), [ROS Noetic](http://wiki.ros.org/noetic/Installation/Ubuntu) и набор библиотек Ignition Common (sudo apt install libignition-common3-dev).
+На вашем компьютере с ОС Ubuntu 20.04 должны быть установлены pip3 (sudo apt install python3-pip), git (sudo apt install git), [ROS Noetic](http://wiki.ros.org/noetic/Installation/Ubuntu) и набор библиотек Ignition Common (sudo apt install libignition-common3-dev). При установке ROS не забудьте прописать в консоли автозагрузку окружения:
+```
+echo "source /opt/ros/noetic/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+```
+Установите необходимые библиотеки для Python:
+```
+pip3 install toml pyros-genmsg packaging
+```
+Установите пакет gazebo_ros:
+```
+ros-noetic-gazebo-ros
+```
 Скачайте исходники PX4 с тегом версии vX.Y.Z и установите модуль sitl_gazebo
 ```
  git clone --branch vX.Y.Z https://github.com/PX4/PX4-Autopilot.git
@@ -20,10 +32,17 @@ cd multiple-sitl/install
 ./all.sh
 cd ..
 ```
+Импортировать модели мира 10hect.world:
+```
+cp -r models/x_balk/ /usr/share/gazebo-11/models/
+cp -r models/y_balk/ /usr/share/gazebo-11/models/
+cp -r models/grass_plane/ /usr/share/gazebo-11/models/
+```
+
 # Запуск симуляции
 Для того чтобы запустить симуляцию с двумя моделями выполните:
 ```
-./start_2models.rb -n количество_первых_моделей --gazebo_model первая_модель -n2 количество_вторых_моделей --gazebo_model2 вторая_модель
+./start_2models.rb -n количество_первых_моделей --gazebo_model первая_модель -n2 количество_вторых_моделей --gazebo_model2 вторая_модель [файл мира gazebo]
 ```
 Примечание: для того чтобы в симуляции был приемлемый Real Time Factor рекомендуется загружать первой моделью менее стабильную и оптимизированную. Например, запустить симуляцию с одним ровером и двумя коптерами:
 ```
