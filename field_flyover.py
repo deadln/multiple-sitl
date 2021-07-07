@@ -18,22 +18,23 @@ instances_num = 1
 freq = 20  # Герц, частота посылки управляющих команд аппарату
 
 data = {}
-data_gazebo = ModelStates()
-routes = {}
-point_counts = {}
-lz = {}
-correction = {}
-points = []
-is_landed = []
+data_gazebo = ModelStates() # данные из топика моделей gazebo
+routes = {}  # маршруты для каждой модели
+point_counts = {}  # номера текущих точек для моделей
+lz = {}  # зоны посадки
+correction = {}  # веторы кореекции координат,используются из-за того, что каждая модель считает точкой (0,0) место
+# появления
+points = []  # все точки для объезда поля
+is_landed = []  # список состояний хранящий состояния посадки моделей
 
-EPS = 0.8
-LINE_DISTANCE_MC = 10
-LINE_DISTANCE_ROVER = 5
+EPS = 0.8  # эпсилон для приближения к точке
+LINE_DISTANCE_MC = 10  # расстояние между линиями облёта для коптеров
+LINE_DISTANCE_ROVER = 3  # расстояние между линиями облёта для коптеров
 ALTITUDE = 10
 
 
 def subscribe_on_mavros_topics(suff, data_class, instances_num, start_num):
-    # подписываемся на Mavros топики всех аппаратов
+    """Подписываться на Mavros топики всех аппаратов"""
     for n in range(1, instances_num + 1):
         data[n] = {}
         topic = f"/mavros{n}/{suff}"
@@ -50,6 +51,7 @@ def topic_cb_gazebo(msg, callback_args):
 
 
 def service_proxy(n, path, arg_type, *args, **kwds):
+    """Вызов сервиса"""
     service = rospy.ServiceProxy(f"/mavros{n}/{path}", arg_type)
     ret = service(*args, **kwds)
 
@@ -57,12 +59,14 @@ def service_proxy(n, path, arg_type, *args, **kwds):
 
 
 def arming(n, to_arm):
+    """Арминг робота"""
     d = data[n].get("state")
     if d is not None and d.armed != to_arm:
         service_proxy(n, "cmd/arming", CommandBool, to_arm)
 
 
 def set_mode(n, new_mode):
+    """Изменения режима работы робота"""
     d = data[n].get("state")
     if d is not None and d.mode != new_mode:
         service_proxy(n, "set_mode", SetMode, custom_mode=new_mode)
@@ -80,7 +84,7 @@ def subscribe_on_topics(instances_num, start_num=1):
     subscribe_on_mavros_topics("state", State, instances_num, start_num)
     subscribe_on_mavros_topics("extended_state", ExtendedState, instances_num, start_num)
 
-    # состояние моделей в gazebo
+    # состояние моделей в gazebo (необходимо для навигации ровера)
     rospy.Subscriber("/gazebo/model_states", ModelStates, topic_cb_gazebo, callback_args=())
 
 
@@ -89,6 +93,7 @@ def on_shutdown_cb():
 
 
 def set_pos(pt, p, n):
+    """Полёт в точку"""
     pt.type_mask = pt.IGNORE_VX | pt.IGNORE_VY | pt.IGNORE_VZ | pt.IGNORE_AFX | pt.IGNORE_AFY | pt.IGNORE_AFZ | pt.IGNORE_YAW | pt.IGNORE_YAW_RATE
 
     p = p - correction[n]
@@ -101,6 +106,7 @@ def set_pos(pt, p, n):
 
 
 def set_vel(pt, v, n):
+    """Задать вектор скорости"""
     pt.type_mask = pt.IGNORE_PX | pt.IGNORE_PY | pt.IGNORE_PZ | pt.IGNORE_AFX | pt.IGNORE_AFY | pt.IGNORE_AFZ | pt.IGNORE_YAW | pt.IGNORE_YAW_RATE
 
     v = v - correction[n]
@@ -113,6 +119,7 @@ def set_vel(pt, v, n):
 
 
 def set_vel_to_point(pt, n, p):
+    """Задать вектор скорости для полёта в точку. Нужно для ровера, так как на нём set_pos не работает"""
     pt.type_mask = pt.IGNORE_PX | pt.IGNORE_PY | pt.IGNORE_PZ | pt.IGNORE_AFX | pt.IGNORE_AFY | pt.IGNORE_AFZ | pt.IGNORE_YAW | pt.IGNORE_YAW_RATE
 
     telemetry = get_telemetry(n)
@@ -125,7 +132,6 @@ def set_vel_to_point(pt, n, p):
         pt.velocity.z = 0
         return
     v = (np.array([p[0], p[1]]) - np.array([telemetry[0], telemetry[1]])) * 2
-    # v = get_straight_speed_vector(v)
     if np.linalg.norm(v) > 10:
         v = v / np.linalg.norm(v) * 10
 
@@ -137,23 +143,10 @@ def set_vel_to_point(pt, n, p):
     pt.velocity.z = 0
 
 
-def get_straight_speed_vector(v):
-    a = np.array([1, 0])
-    sn = np.cross(a, v) / (np.linalg.norm(a)*np.linalg.norm(v))
-    cs = np.dot(a, v) / (np.linalg.norm(a)*np.linalg.norm(v))
-
-    if abs(sn) <= math.sqrt(2) / 2 and cs >= math.sqrt(2) / 2:
-        return np.array([0.1, 0])
-    elif abs(cs) <= math.sqrt(2) / 2 and sn >= math.sqrt(2) / 2:
-        return np.array([0, 0.1])
-    elif abs(sn) <= math.sqrt(2) / 2 and cs <= -math.sqrt(2) / 2:
-        return np.array([-0.1, 0])
-    elif abs(cs) <= math.sqrt(2) / 2 and sn <= -math.sqrt(2) / 2:
-        return np.array([0, -0.1])
-    return np.array([0.316, 0.316])
-
 def get_telemetry(n):
-    if n <= n_rover:
+    """Преобразовать телеметрию в массив numpy. Так как у ровера плагины ориентации работаю нестабильно, используются
+    координаты модели, получаемые от gazebo"""
+    if n <= n_rover:  # Если это ровер
         model_index = 0
         for i in range(len(data_gazebo.name)):
             if data_gazebo.name[i] == f'r1_rover{n}':
@@ -163,54 +156,54 @@ def get_telemetry(n):
             telemetry = data_gazebo.pose[model_index]
         except IndexError:
             return None
-    else:
+    else:  # Если это коптер
         telemetry = data[n].get('local_position/pose')
         if telemetry is None:
             return None
         telemetry = telemetry.pose
     telemetry = np.array([telemetry.position.x, telemetry.position.y, telemetry.position.z]) + correction[n]
-    # telemetry = {'x': telemetry.pose.position.x, 'y': telemetry.pose.position.y, 'z': telemetry.pose.position.z}#, 'yaw' : telemetry.pose.yaw}
     return telemetry
 
 
 def mc_flight(pt, n, dt):
+    """Полёт дронов"""
     if dt > 5:
         arming(n, True)
     telemetry = get_telemetry(n)
     if telemetry is None:
         return
 
-    if n not in lz.keys():
+    if n not in lz.keys():  # запоминание зоны взлёта
         lz[n] = telemetry
 
-    if point_counts[n] >= len(routes[n]):
+    if point_counts[n] >= len(routes[n]):  # возврат в зону взлёта
         set_pos(pt, lz[n], n)
     else:
-        set_pos(pt, routes[n][point_counts[n]], n)
+        set_pos(pt, routes[n][point_counts[n]], n)  # полёт к точке маршрута
 
 
 def rover_run(pt, n, dt):
+    """Езда роверов"""
     arming(n, True)
     telemetry = get_telemetry(n)
     if telemetry is None:
         return
 
-    if n not in lz.keys():
+    if n not in lz.keys():  # запоминание зоны взлёта
         lz[n] = telemetry
 
-    if point_counts[n] >= len(routes[n]):
+    if point_counts[n] >= len(routes[n]):  # возврат в зону старта
         set_vel_to_point(pt, n, lz[n])
-        # set_pos(pt, lz[n])
     else:
-        set_vel_to_point(pt, n, routes[n][point_counts[n]])
-        # set_vel(pt, np.array([0,30,0]))
+        set_vel_to_point(pt, n, routes[n][point_counts[n]])  # полёт к точке маршрута
 
 
 def offboard_loop_mc():
+    """Цикл управления коптерами"""
     pub_pt = {}
     global points
     points = split_points(points, n_mc)
-    # создаем топики, для публикации управляющих значений
+    # создаем топики, для публикации управляющих значений, инициализиуем служебные словари и массивы
     for n in range(n_rover + 1, n_rover + n_mc + 1):
         pub_pt[n] = rospy.Publisher(f"/mavros{n}/setpoint_raw/local", PositionTarget, queue_size=10)
         routes[n] = points[n - n_rover - 1]
@@ -233,15 +226,18 @@ def offboard_loop_mc():
         # управляем каждым аппаратом централизованно
         for n in range(n_rover + 1, n_rover + n_mc + 1):
             pt = PositionTarget()
+            pt.coordinate_frame = pt.FRAME_LOCAL_NED
             set_mode(n, "OFFBOARD")
             telemetry = get_telemetry(n)
             if telemetry is None or is_landed[n - n_rover - 1] == 1:
                 continue
-            # print(n, telemetry)
+            # Следующая точка
             if not point_counts[n] >= len(routes[n]) and point_counts[n] >= 0 and np.linalg.norm(
                     telemetry - routes[n][point_counts[n]]) < EPS:
                 point_counts[n] += 1
-                # print("NEW TARGET", routes[n][point_counts[n]])
+                if point_counts[n] < len(routes[n]):
+                    print("НОВАЯ ЦЕЛЬ", routes[n][point_counts[n]])
+            # Возврат в зону взлёта
             if point_counts[n] >= len(routes[n]) and np.linalg.norm(telemetry - lz[n]) < 0.2:
                 arming(n, False)
                 is_landed[n - n_rover - 1] = 1
@@ -254,6 +250,7 @@ def offboard_loop_mc():
 
 
 def offboard_loop_rover():
+    """Цикл управления роверами"""
     pub_pt = {}
     global points
     points = split_points(points, n_rover)
@@ -280,21 +277,24 @@ def offboard_loop_rover():
         # управляем каждым аппаратом централизованно
         for n in range(1, n_rover + 1):
             pt = PositionTarget()
+            pt.coordinate_frame = pt.FRAME_LOCAL_NED
             set_mode(n, "OFFBOARD")
             telemetry = get_telemetry(n)
-            print(telemetry)
             if telemetry is None or is_landed[n - 1] == 1:
                 continue
+            # Следующая точка
             if not point_counts[n] >= len(routes[n]) and point_counts[n] >= 0 and np.linalg.norm(
                     telemetry - routes[n][point_counts[n]]) < EPS:
                 point_counts[n] += 1
-                # arming(n, False)
-                print("TARGET CHANGED")
+                if point_counts[n] < len(routes[n]):
+                    print("НОВАЯ ЦЕЛЬ", routes[n][point_counts[n]])
+            # Возврат в зону взлёта
             if point_counts[n] >= len(routes[n]) and np.linalg.norm(telemetry - lz[n]) < 0.5:
                 arming(n, False)
                 is_landed[n - 1] = 1
                 print("DISARMING")
-            rover_run(pt, n, dt)
+            else:
+                rover_run(pt, n, dt)
             pub_pt[n].publish(pt)
 
         rate.sleep()
@@ -302,7 +302,8 @@ def offboard_loop_rover():
 
 def get_points_of_flyover(corner_a, corner_b, line_distance, altitude=0):
     """Функция принимает на вход левый нижний и правый верхний углы поля (в двумерных координатах),
-    расстояние между линиями облёта поля и высоту полёта. Функция возвращает список точек маршрута для облёта поля."""
+    расстояние между линиями облёта поля и высоту полёта. Функция возвращает список точек маршрута для облёта поля.
+    Маршрут строится в виде зиг-зага вдоль оси Y."""
     res = []
     x_direction = np.array([(corner_b[0] - corner_a[0]), 0, 0])
     y_direction = np.array([0, (corner_b[1] - corner_a[1]) / abs(corner_b[1] - corner_a[1]), 0])
@@ -346,6 +347,7 @@ def get_points_of_flyover(corner_a, corner_b, line_distance, altitude=0):
 
 
 def split_points(points, n):
+    """Разделить точки маршрута между роботами"""
     res = []
     split_size = len(points) // n
     mod = len(points) % n
@@ -369,11 +371,9 @@ if __name__ == '__main__':
     rospy.init_node(node_name)
     rospy.loginfo(node_name + " started")
 
-    # instances_num = int(input('Введите количество аппаратов '))
     n_mc = int(input('Введите количество дронов '))
     n_rover = int(input('Введите количество роверов '))
     instances_num = n_mc + n_rover
-    # vehicle_type = input("Введите тип аппарата (mc по умолчанию или rover) ")
     corner_a = input('Введите первый угол поля в формате x y ')
     corner_b = input('Введите второй угол поля в формате x y ')
     corner_a = corner_a.split()
@@ -383,9 +383,6 @@ if __name__ == '__main__':
         corner_b[i] = float(corner_b[i])
     corner_a = np.array(corner_a)
     corner_b = np.array(corner_b)
-    # if vehicle_type == "rover":
-    #     points = get_points_of_flyover(corner_a, corner_b, LINE_DISTANCE_ROVER)
-    # else:
 
     subscribe_on_topics(instances_num)
     rospy.on_shutdown(on_shutdown_cb)
@@ -404,30 +401,6 @@ if __name__ == '__main__':
     except rospy.ROSInterruptException:
         pass
     print("Объезд завершён")
-    # if vehicle_type == "rover":
-    #     try:
-    #         offboard_loop_rovers()
-    #     except rospy.ROSInterruptException:
-    #         pass
-    # else:
-    #     try:
-    #         offboard_loop()
-    #     except rospy.ROSInterruptException:
-    #         pass
-
-    # try:
-    #     offboard_loop()
-    # except rospy.ROSInterruptException:
-    #     pass
-    #
-    # if is_rovers_active:
-    #     subscribe_on_topics(instances_num)
-    #     try:
-    #         offboard_loop_rovers()
-    #     except rospy.ROSInterruptException:
-    #         pass
-
-# Формула матрицы поворота
-# np.array([[math.cos(math.pi / 2), -math.sin(math.pi / 2)],[math.sin(math.pi / 2), math.cos(math.pi / 2)]])
+# Если ровер остановился или резко поехал в случайную сторону
 # ekf2 stop
 # ekf2 start
