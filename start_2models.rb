@@ -418,8 +418,3 @@ else
     xspawn("gazebo", abs[:home] + "/gazebo.sh #{rels[:workspace_world]} #{abs[:gazebo]} #{abs[:sitl_gazebo]}", opts[:debug])
   }
 end
-
-for i in (0..(opts[:n]+opts[:n2]-1))
-  wait_firmware(i, "ekf2", 1, ": valid", abs)
-end
-# /home/deadln/gazebo/mult_sitl2/Firmware/build/px4_sitl_default/bin/px4
