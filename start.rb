@@ -95,7 +95,7 @@ end
 
 def expand_and_check()
   #do not check
-  for sym in [:workspace, :gazebo, :catkin_ws]
+  for sym in [:workspace, :gazebo, :ros_ws]
     @abs[sym] = File.expand_path(@opts[sym])
   end
 
@@ -416,7 +416,13 @@ def start_mavros(m_index, m_num, model_name, ports)
   args.each { |k, v| launch<<" #{k}:=#{v}" }
 
   cd(@abs[:home] + "/mavros") {
-    xspawn("mavros-#{m_num}", "./ros_env.sh #{@abs[:catkin_ws]} roslaunch #{launch}", @opts[:debug])
+    xspawn("mavros-#{m_num}", "./ros_env.sh #{@abs[:ros_ws]} roslaunch #{launch}", @opts[:debug])
+  }
+end
+
+def start_rtps(m_index, m_num, model_name, ports)
+  cd(@abs[:home] + "/ros2") {
+    xspawn("rtps-#{m_num}", "./env.sh #{@abs[:ros_ws]} micrortps_agent -t UDP -s #{2019+2*m_index} -r #{2020+2*m_index}", @opts[:debug])
   }
 end
 
@@ -445,7 +451,7 @@ end
 
   workspace: "workspace",
   gazebo: "gazebo",
-  catkin_ws: "workspace/catkin_ws",
+  ros_ws: "workspace/catkin_ws",
 }
 
 @port_names = []
@@ -474,7 +480,7 @@ OptionParser.new do |op|
   op.on("--firmware_initd PATH", "path to dir with user defined firmware files ")
   op.on("--workspace PATH", "path to workspace")
   op.on("--gazebo PATH", "path to gazebo resources")
-  op.on("--catkin_ws PATH", "path to catkin workspace")
+  op.on("--ros_ws PATH", "path to ROS workspace")
 
   op.on("--ports_base PORT", Integer)
   op.on("--ports_step STEP", Integer)
@@ -499,6 +505,7 @@ OptionParser.new do |op|
   op.on("--nospawn", "without spawn")
   op.on("--home_gps x,y,z", Array, "PX4_HOME_LAT, PX4_HOME_LON, PX4_HOME_ALT env variables")
   op.on("--home_dt DT", Float, "PX4_HOME_DT env variable")
+  op.on("--ros2", "ROS2 mode with micrortps client/agent")
 
   op.on("-h", "--help", "help and show defaults") do
     puts op
@@ -521,6 +528,11 @@ end
 if @opts[:nolockstep]
   @opts[:go][:enable_lockstep] = 0
   @opts[:build_label] = "nolockstep"
+end
+
+if @opts[:ros2]
+  @opts[:nomavros] = true
+  @opts[:build_label] = "rtps"
 end
 
 #relative paths
@@ -577,7 +589,7 @@ create_fcu_files()
 #start
 
 if @opts[:gazebo_ros] or not @opts[:nomavros]
-  xspawn("", @abs[:home] + "/mavros/ros_env.sh #{@abs[:catkin_ws]} roscore")
+  xspawn("", @abs[:home] + "/mavros/ros_env.sh #{@abs[:ros_ws]} roscore")
   sleep 3
 end
 
@@ -585,6 +597,7 @@ if @opts[:nospawn]
   iterate_instances { |m_index, m_num, model_name, ports|
     start_firmware(m_index, m_num, model_name, ports) unless @opts[:hitl]
     start_mavros(m_index, m_num, model_name, ports) unless @opts[:nomavros]
+    start_rtps(m_index, m_num, model_name, ports) if @opts[:ros2]
   }
 
   start_gazebo()
@@ -612,6 +625,7 @@ if @opts[:nolockstep]
     insert_gz_model(m_index, m_num, model_name, ports)
     #start_firmware(m_index, m_num, model_name, ports) unless @opts[:hitl]
     wait_process("rcS #{m_index}", 0.2)
+    start_rtps(m_index, m_num, model_name, ports) if @opts[:ros2]
     sleep 0.5
 
     move_gz_model(m_index, m_num, model_name, ports)
@@ -635,6 +649,7 @@ else
 
     sleep 0.5
     wait_process("rcS #{m_index}", 0.2)
+    start_rtps(m_index, m_num, model_name, ports) if @opts[:ros2]
 
     move_gz_model(m_index, m_num, model_name, ports)
 
