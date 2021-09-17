@@ -423,7 +423,7 @@ end
 
 def start_rtps(m_index, m_num, model_name, ports)
   cd(@abs[:home] + "/ros2") {
-    xspawn("rtps-#{m_num}", "./env.sh #{@abs[:ros_ws]} micrortps_agent -t UDP -s #{2019+2*m_index} -r #{2020+2*m_index}", @opts[:debug])
+    xspawn("rtps-#{m_num}", "./env.sh #{@abs[:ros_ws]} micrortps_agent -t UDP -n rtps#{m_num} -s #{2019+2*m_index} -r #{2020+2*m_index}", @opts[:debug])
   }
 end
 
