@@ -100,7 +100,7 @@ def expand_and_check()
   end
 
   #check
-  for sym in [:firmware, :sitl_gazebo, :plugin_lists, :world_sdf, :firmware_initd, :pose_list]
+  for sym in [:firmware, :sitl_gazebo, :plugin_lists, :world_sdf, :firmware_initd, :pose_list, :airsim]
     @abs[sym] = check_expanded_path(@opts[sym]) if @opts[sym]
   end
 
@@ -118,9 +118,11 @@ def expand_and_check()
   #check firmware files
   expand_firmware_files()
 
-  #gazebo resources
-  for sym in [:world_sdf, :model_sdf]
-    check_gazebo_resource(sym)
+  unless @opts[:airsim]
+    #gazebo resources
+    for sym in [:world_sdf, :model_sdf]
+      check_gazebo_resource(sym)
+    end
   end
 
   #workspace
@@ -264,7 +266,6 @@ def gz_env()
 
   if @opts[:nospawn]
     @opts[:home_dt] = 3 unless @opts[:home_dt]
-    @opts[:home_gps] = ['0', '0', '200'] unless @opts[:home_gps]
   end
 
   if @opts[:home_dt]
@@ -426,6 +427,59 @@ def start_rtps(m_index, m_num, model_name, ports)
   }
 end
 
+def start_airsim
+  @opts[:home_gps].map! { |s| s.to_f }
+
+  require 'json'
+  json_in = @abs[:home] + '/airsim/settings.json'
+  root = JSON.parse(File.read(json_in))
+
+  root.update({
+    "ClockType" => (@opts[:nolockstep] ? "" : "SteppableClock"),
+    "OriginGeopoint" => {
+      "Latitude" => @opts[:home_gps][0],
+      "Longitude" => @opts[:home_gps][1],
+      "Altitude" => @opts[:home_gps][2]
+    }
+  })
+
+  vs = root["Vehicles"].values
+  if vs.size == 0
+    puts("invalid #{json_in}")
+    exit
+  end
+
+  v = vs[0]
+  v.update({
+    "UseSerial" => false,
+    "LockStep" => (not @opts[:nolockstep]),
+    "UseTcp" => (@opts[:use_tcp] ? true : false)
+  })
+
+  v["Parameters"].update({
+    "LPE_LAT" => @opts[:home_gps][0],
+    "LPE_LON" => @opts[:home_gps][1]
+  })
+
+  root["Vehicles"] = {}
+
+  iterate_instances { |m_index, m_num, model_name, ports|
+    p = poses(m_index)
+
+    root["Vehicles"][model_name] = v.merge({
+      (@opts[:use_tcp] ? "TcpPort" : "UdpPort") => ports[:sim],
+      "ControlPortLocal" => ports[:offb_out],
+      "ControlPortRemote" => ports[:offb],
+      "X" => p[0], "Y" => p[1], "Z" => p[2],
+    })
+  }
+
+  json_out = @abs[:workspace] + '/settings.json'
+  IO.write(json_out, JSON.pretty_generate(root))
+
+  xspawn("airsim", "#{@abs[:airsim]} --settings '#{json_out}'", @opts[:debug])
+end
+
 ####################################
 
 #default options
@@ -503,9 +557,11 @@ OptionParser.new do |op|
   op.on("--pose_list PATH", "path to models pose list")
   op.on("--nolockstep", "lockstep disabled")
   op.on("--nospawn", "without spawn")
-  op.on("--home_gps x,y,z", Array, "PX4_HOME_LAT, PX4_HOME_LON, PX4_HOME_ALT env variables")
+  op.on("--home_gps x,y,z", Array, "home point Lat,Lon,Alt")
   op.on("--home_dt DT", Float, "PX4_HOME_DT env variable")
   op.on("--ros2", "ROS2 mode with micrortps client/agent")
+
+  op.on("--airsim PATH", "path to AirSim shell script")
 
   op.on("-h", "--help", "help and show defaults") do
     puts op
@@ -533,6 +589,15 @@ end
 if @opts[:ros2]
   @opts[:nomavros] = true
   @opts[:build_label] = "rtps"
+end
+
+if @opts[:airsim]
+  @opts[:use_tcp] = true
+  @opts[:nospawn] = true
+end
+
+if @opts[:nospawn]
+  @opts[:home_gps] = ['1', '1', '200'] unless @opts[:home_gps]
 end
 
 #relative paths
@@ -600,11 +665,15 @@ if @opts[:nospawn]
     start_rtps(m_index, m_num, model_name, ports) if @opts[:ros2]
   }
 
-  start_gazebo()
+  if @opts[:airsim]
+    start_airsim()
+  else
+    start_gazebo()
 
-  iterate_instances { |m_index, m_num, model_name, ports|
-    wait_firmware(m_index, "ekf2", 1, ": valid")
-  }
+    iterate_instances { |m_index, m_num, model_name, ports|
+      wait_firmware(m_index, "ekf2", 1, ": valid")
+    }
+  end
 
   exit
 end
